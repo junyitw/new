@@ -106,7 +106,7 @@
     #print-container-school { display: none; }
 
     /* =========================================================
-       🖨️ 列印專用樣式調校（單頁規格）
+       🖨️ 列印專用樣式調校（單頁規格修正）
        ========================================================= */
     @media print {
       @page { size: landscape; margin: 4mm 5mm 4mm 5mm; }
@@ -114,6 +114,19 @@
       
       .no-print, .sidebar, .top-toolbar, .mt-4, header, nav, #top-portal-nav, #module-classroom, #module-pickup { display: none !important; }
       
+      /* 解除所有外層與包裹 div 寬度限制，強制 100% 貼齊列印頁面 */
+      html, body, #module-homework, .main-container, .table-container, .table-container > div {
+        overflow: visible !important;
+        height: auto !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+
       #print-only-header { display: block !important; margin-bottom: 2px !important; }
       #print-only-header h1 { font-size: 15pt !important; margin: 0 !important; }
       #print-only-header p { font-size: 9pt !important; margin: 0 !important; }
@@ -124,7 +137,6 @@
 
       .page-content { display: none !important; }
       .page-content.flex { display: flex !important; flex-direction: column !important; width: 100% !important; }
-      .main-container, .table-container { margin: 0; padding: 0 !important; width: 100% !important; overflow: visible !important; height: auto !important; border: none; box-shadow: none; }
       
       .search-btn { display: none !important; }
       .stat-input-wrapper { justify-content: flex-end !important; padding-right: 0.5rem !important; }
@@ -132,8 +144,10 @@
       table { width: 100% !important; table-layout: fixed !important; }
       .sticky-seat, .name-cell, thead { position: static !important; }
       
-      /* 作業登記列印 */
-      #page-entry table { width: 100%; font-size: 9pt; border: 2px solid black; }
+      /* ---------------------------------------------------------
+         1. 作業登記列印優化
+         --------------------------------------------------------- */
+      #page-entry table { width: 100% !important; font-size: 8.5pt !important; border: 2px solid black !important; }
       #page-entry th, #page-entry td { border: 1px solid black !important; padding: 1px 1px !important; height: 1.25rem !important; }
       #page-entry tr { height: 1.25rem !important; }
       
@@ -142,28 +156,32 @@
         justify-content: center !important; 
         align-items: center !important; 
         padding-right: 0 !important; 
-        font-size: 10pt !important;
+        font-size: 9.5pt !important;
         color: #000000 !important; 
         font-weight: bold !important;
         visibility: visible !important;
       }
       
-      #page-entry th.sticky-seat, #page-entry td.sticky-seat { width: 30px !important; }
+      #page-entry th.sticky-seat, #page-entry td.sticky-seat { width: 28px !important; min-width: 28px !important; }
       #page-entry th.name-cell, #page-entry td.name-cell { 
-        width: 115px !important; 
-        max-width: 115px !important;
-        text-align: center; 
+        width: 120px !important; 
+        max-width: none !important;
+        text-align: center !important; 
         padding-left: 0 !important; 
         white-space: nowrap !important;
-        overflow: hidden !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        font-size: 9pt !important;
       }
-      #page-entry th.stats-col, #page-entry td.stats-col { width: 32px !important; }
+      #page-entry th.stats-col, #page-entry td.stats-col { width: 28px !important; min-width: 28px !important; }
 
       .status-X { background-color: #fee2e2 !important; color: #dc2626 !important; }
       .status-TRI { background-color: #fef9c3 !important; color: #ca8a04 !important; }
 
-      /* 出缺勤紀錄表列印 */
-      #page-attendance table { width: 100%; font-size: 9.5pt; border: 2px solid black; } 
+      /* ---------------------------------------------------------
+         2. 出缺勤紀錄表列印優化 (徹底解決溢出與姓名省略截斷)
+         --------------------------------------------------------- */
+      #page-attendance table { width: 100% !important; font-size: 9pt !important; border: 2px solid black !important; } 
       #page-attendance .screen-only { display: none !important; }
       #page-attendance .print-only-cell { display: table-cell !important; }
       #attHeaderRow2 { display: none !important; }
@@ -172,31 +190,36 @@
         border: 1px solid black !important; 
         padding: 1px !important; 
         height: 1.65rem !important; 
-        line-height: 1.2;
+        line-height: 1.2 !important;
       }
       #page-attendance tr { height: 1.65rem !important; }
       #page-attendance thead th { height: 1.65rem !important; }
       
-      #page-attendance th.sticky-seat, #page-attendance td.sticky-seat { width: 32px !important; }
+      #page-attendance th.sticky-seat, #page-attendance td.sticky-seat { width: 30px !important; min-width: 30px !important; }
       #page-attendance th.name-cell, #page-attendance td.name-cell { 
-        width: 115px !important; 
-        max-width: 115px !important;
-        text-align: center; 
+        width: 130px !important; 
+        max-width: none !important;
+        text-align: center !important; 
         padding-left: 0 !important; 
         white-space: nowrap !important;
-        overflow: hidden !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        font-size: 9.5pt !important;
       }
+      #page-attendance th.border-l-2, #page-attendance td.border-l-2 { width: 38px !important; }
 
-      /* 個人通知單設計 */
+      /* ---------------------------------------------------------
+         3. 個人通知單設計
+         --------------------------------------------------------- */
       #page-reports { width: 100% !important; }
       #page-reports.flex { display: block !important; }
       #page-reports .report-page { 
-        box-shadow: none; margin: 0; width: 100% !important; 
+        box-shadow: none !important; margin: 0 !important; width: 100% !important; 
         min-height: 297mm !important; height: auto !important;
-        page-break-after: always; break-after: page; 
+        page-break-after: always !important; break-after: page !important; 
         padding: 15mm 20mm !important; 
       }
-      #page-reports .report-page:last-child { page-break-after: auto; }
+      #page-reports .report-page:last-child { page-break-after: auto !important; }
       #page-stats input { border: none !important; background: transparent !important; }
     }
   </style>
@@ -304,7 +327,7 @@
           </div>
 
           <div class="flex-1 overflow-auto p-4 table-container bg-gray-50">
-            <div class="min-w-[1200px] bg-white shadow-sm pb-2">
+            <div class="w-full overflow-x-auto bg-white shadow-sm pb-2">
               <table class="w-full text-sm border-collapse">
                 <thead class="sticky top-0 z-20 bg-gray-100 shadow-sm">
                   <tr id="tableHeaderRow1"></tr>
@@ -344,7 +367,7 @@
           </div>
 
           <div class="flex-1 overflow-auto p-4 table-container bg-gray-50">
-            <div class="min-w-[1200px] bg-white shadow-sm pb-2">
+            <div class="w-full overflow-x-auto bg-white shadow-sm pb-2">
               <table class="w-full text-lg border-collapse">
                 <thead class="sticky top-0 z-30 bg-gray-100 shadow-sm">
                   <tr id="attHeaderRow1"></tr>
@@ -882,7 +905,7 @@
 
         const incrementClassName = (name) => {
           const numMap = { '一':'二', '二':'三', '三':'四', '四':'五', '五':'六', '1':'2', '2':'3', '3':'4', '4':'5', '5':'6' };
-          return name.replace(/[一二三四五12345]/g, (m) => numMap[m] || m);
+          return name.replace(/[一二三四五12345]/g, (match) => numMap[match] || match);
         };
 
         const graduationClass = this.data.classes[5];
