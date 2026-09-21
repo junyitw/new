@@ -242,7 +242,7 @@
         </div>
 
         <div class="flex items-center bg-gray-100 p-1.5 rounded-2xl border border-gray-200">
-          <button id="portal-btn-homework" onclick="switchPortal('homework')" class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all bg-white text-indigo-700 shadow-sm">
+          <button id="portal-btn-homework" onclick="switchPortal('homework')" class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all text-gray-600 hover:text-gray-900">
             <i class="fa-solid fa-pencil"></i>
             <span class="hidden sm:inline">作業與出缺勤</span>
           </button>
@@ -250,7 +250,7 @@
             <i class="fa-solid fa-school"></i>
             <span class="hidden sm:inline">教室狀況通報</span>
           </button>
-          <button id="portal-btn-pickup" onclick="switchPortal('pickup')" class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all text-gray-600 hover:text-gray-900">
+          <button id="portal-btn-pickup" onclick="switchPortal('pickup')" class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all bg-white text-indigo-700 shadow-sm">
             <i class="fa-solid fa-child-reaching"></i>
             <span class="hidden sm:inline">課後晚接記錄</span>
           </button>
@@ -263,7 +263,7 @@
   <!-- =========================================================
        系統 1：作業與出缺勤系統
        ========================================================= -->
-  <div id="module-homework" class="flex-1 flex overflow-hidden">
+  <div id="module-homework" class="flex-1 flex overflow-hidden" style="display: none;">
     <div class="w-full h-full flex flex-col md:flex-row overflow-hidden">
       
       <!-- 側邊欄 -->
@@ -641,7 +641,7 @@
   <!-- =========================================================
        系統 3：均一國小部課後晚接記錄系統
        ========================================================= -->
-  <div id="module-pickup" class="flex-1 overflow-y-auto" style="display: none;">
+  <div id="module-pickup" class="flex-1 overflow-y-auto">
     <div id="pickup-app-container"></div>
   </div>
 
@@ -901,7 +901,7 @@
 
         const incrementClassName = (name) => {
           const numMap = { '一':'二', '二':'三', '三':'四', '四':'五', '五':'六', '1':'2', '2':'3', '3':'4', '4':'5', '5':'6' };
-          return name.replace(/[一二三四五12345]/g, (m) => numMap[m] || m);
+          return name.replace(/[一二三四五12345]/g, (match) => numMap[match] || match);
         };
 
         const graduationClass = this.data.classes[5];
@@ -2307,6 +2307,7 @@
         setupSchoolDropzone();
 
         fetchPickupData();
+        switchPortal('pickup');
       } catch (e) {
         console.error("Window onload init error:", e);
       }
