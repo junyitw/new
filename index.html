@@ -829,18 +829,52 @@
         currentPage: 'entry', sortStatBy: 'seat',
         periods: ['M', '1', '2', '3', '4', '5', '6', '7'],
         includeSaturday: false,
-        isLoggedIn: false // 預設未登入，只能檢視
+        isLoggedIn: false
       },
-      init() {
-        const saved = localStorage.getItem('homework_data');
-        let parsed = {};
-        try { parsed = JSON.parse(saved) || {}; } catch(e){}
+      
+      async init() {
+        showGlobalToast("正在從雲端同步作業與出缺勤資料...", "info");
         
-        this.data.classes = parsed.classes || ["1年級", "2年級", "3年級", "4年級", "5年級", "6年級"];
-        this.data.students = parsed.students || [];
-        this.data.records = parsed.records || {};
-        this.data.statsOverrides = parsed.statsOverrides || {}; 
-        if(parsed.subjects) this.data.subjects = parsed.subjects;
+        // 1. 嘗試從 GAS 雲端抓取資料
+        let cloudLoaded = false;
+        try {
+          const res = await fetch(`${HOMEWORK_GAS_URL}?action=getData`);
+          const json = await res.json();
+          if (json.status === 'success' && json.data) {
+            this.data.classes = json.data.classes || ["1年級", "2年級", "3年級", "4年級", "5年級", "6年級"];
+            this.data.subjects = json.data.subjects || ["工作本", "語文", "數學"];
+            this.data.students = json.data.students || [];
+            this.data.records = json.data.records || {};
+            
+            // 同時更新本機快取
+            localStorage.setItem('homework_data', JSON.stringify({
+              classes: this.data.classes,
+              subjects: this.data.subjects,
+              students: this.data.students,
+              records: this.data.records,
+              statsOverrides: this.data.statsOverrides
+            }));
+            cloudLoaded = true;
+            showGlobalToast("✅ 雲端資料同步成功！");
+          }
+        } catch (err) {
+          console.warn("無法連線至雲端，改用本機快取", err);
+        }
+
+        // 2. 如果雲端讀取失敗（例如無網路），則讀取本機 localStorage
+        if (!cloudLoaded) {
+          const saved = localStorage.getItem('homework_data');
+          let parsed = {};
+          try { parsed = JSON.parse(saved) || {}; } catch(e){}
+          
+          this.data.classes = parsed.classes || ["1年級", "2年級", "3年級", "4年級", "5年級", "6年級"];
+          this.data.students = parsed.students || [];
+          this.data.records = parsed.records || {};
+          this.data.statsOverrides = parsed.statsOverrides || {}; 
+          if(parsed.subjects) this.data.subjects = parsed.subjects;
+          showGlobalToast("⚠️ 目前使用本機快取資料", "info");
+        }
+
         this.data.currentClass = this.data.classes[0];
         
         this.renderClassSelect();
