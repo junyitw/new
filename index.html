@@ -16,21 +16,20 @@
     body { font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
 
     /* --- 快填選單 Modal 樣式優化 --- */
-    #modalOverlay, #detailModalOverlay, #pickupModalOverlay, #authModalOverlay {
+    #modalOverlay, #detailModalOverlay, #pickupModalOverlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0, 0, 0, 0.4);
       backdrop-filter: blur(4px);
       display: none; justify-content: center; align-items: center; 
       z-index: 1000;
     }
-    #quickModal, #detailModal, #pickupModal, #authModal {
+    #quickModal, #detailModal, #pickupModal {
       background: white; border-radius: 1rem; overflow: hidden;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
       width: 320px;
       animation: modalSlideUp 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
     #pickupModal { width: 340px; }
-    #authModal { width: 360px; }
     @keyframes modalSlideUp {
       from { transform: translateY(30px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
@@ -80,10 +79,6 @@
     .status-OTHER { background-color: #dcfce7; color: #15803d; }  
     .status-OK:hover { background-color: #e5e7eb; }
 
-    /* 唯讀狀態下的表格格樣式 */
-    .readonly-mode .cell-inner { cursor: default; }
-    .readonly-mode .status-OK:hover { background-color: transparent; }
-
     .stat-container-cell { padding: 0; border: 1px solid #6b7280; text-align: center; font-weight: bold; position: relative; }
     .stat-input-wrapper { width: 100%; height: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0 0.5rem; position: relative; }
     .stat-input { width: 3rem; text-align: right; background: transparent; border: none; font-weight: bold; padding: 0; outline: none; }
@@ -97,6 +92,7 @@
     .print-only-cell { display: none; }
     .print-footer { display: none; }
 
+    /* 🌟 個人通知單樣式 */
     .report-page {
       width: 210mm; min-height: 297mm; padding: 15mm 20mm; margin: 0 auto; background: white;
       box-shadow: 0 0 10px rgba(0,0,0,0.1); position: relative; box-sizing: border-box; display: flex; flex-direction: column;
@@ -109,14 +105,26 @@
 
     #print-container-school { display: none; }
 
+    /* =========================================================
+       🖨️ 列印專用樣式調校（單頁規格修正）
+       ========================================================= */
     @media print {
       @page { size: landscape; margin: 4mm 5mm 4mm 5mm; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white !important; }
+      
       .no-print, .sidebar, .top-toolbar, .mt-4, header, nav, #top-portal-nav, #module-classroom, #module-pickup { display: none !important; }
       
+      /* 解除所有外層與包裹 div 寬度限制，強制 100% 貼齊列印頁面 */
       html, body, #module-homework, .main-container, .table-container, .table-container > div {
-        overflow: visible !important; height: auto !important; width: 100% !important; min-width: 0 !important;
-        max-width: 100% !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; border: none !important;
+        overflow: visible !important;
+        height: auto !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
       }
 
       #print-only-header { display: block !important; margin-bottom: 2px !important; }
@@ -136,51 +144,79 @@
       table { width: 100% !important; table-layout: fixed !important; }
       .sticky-seat, .name-cell, thead { position: static !important; }
       
+      /* ---------------------------------------------------------
+         1. 作業登記列印優化
+         --------------------------------------------------------- */
       #page-entry table { width: 100% !important; font-size: 8.5pt !important; border: 2px solid black !important; }
       #page-entry th, #page-entry td { border: 1px solid black !important; padding: 1px 1px !important; height: 1.25rem !important; }
       #page-entry tr { height: 1.25rem !important; }
       
       #page-entry .cell-inner, #entryTableBody .cell-inner { 
-        display: flex !important; justify-content: center !important; align-items: center !important; 
-        padding-right: 0 !important; font-size: 9.5pt !important; color: #000000 !important; font-weight: bold !important;
+        display: flex !important; 
+        justify-content: center !important; 
+        align-items: center !important; 
+        padding-right: 0 !important; 
+        font-size: 9.5pt !important;
+        color: #000000 !important; 
+        font-weight: bold !important;
         visibility: visible !important;
       }
       
       #page-entry th.sticky-seat, #page-entry td.sticky-seat { width: 28px !important; min-width: 28px !important; }
       #page-entry th.name-cell, #page-entry td.name-cell { 
-        width: 120px !important; max-width: none !important; text-align: center !important; 
-        padding-left: 0 !important; white-space: nowrap !important; overflow: visible !important;
-        text-overflow: clip !important; font-size: 9pt !important;
+        width: 120px !important; 
+        max-width: none !important;
+        text-align: center !important; 
+        padding-left: 0 !important; 
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        font-size: 9pt !important;
       }
       #page-entry th.stats-col, #page-entry td.stats-col { width: 28px !important; min-width: 28px !important; }
 
       .status-X { background-color: #fee2e2 !important; color: #dc2626 !important; }
       .status-TRI { background-color: #fef9c3 !important; color: #ca8a04 !important; }
 
+      /* ---------------------------------------------------------
+         2. 出缺勤紀錄表列印優化 (徹底解決溢出與姓名省略截斷)
+         --------------------------------------------------------- */
       #page-attendance table { width: 100% !important; font-size: 9pt !important; border: 2px solid black !important; } 
       #page-attendance .screen-only { display: none !important; }
       #page-attendance .print-only-cell { display: table-cell !important; }
       #attHeaderRow2 { display: none !important; }
 
       #page-attendance th, #page-attendance td { 
-        border: 1px solid black !important; padding: 1px !important; height: 1.65rem !important; line-height: 1.2 !important;
+        border: 1px solid black !important; 
+        padding: 1px !important; 
+        height: 1.65rem !important; 
+        line-height: 1.2 !important;
       }
       #page-attendance tr { height: 1.65rem !important; }
       #page-attendance thead th { height: 1.65rem !important; }
       
       #page-attendance th.sticky-seat, #page-attendance td.sticky-seat { width: 30px !important; min-width: 30px !important; }
       #page-attendance th.name-cell, #page-attendance td.name-cell { 
-        width: 130px !important; max-width: none !important; text-align: center !important; 
-        padding-left: 0 !important; white-space: nowrap !important; overflow: visible !important;
-        text-overflow: clip !important; font-size: 9.5pt !important;
+        width: 130px !important; 
+        max-width: none !important;
+        text-align: center !important; 
+        padding-left: 0 !important; 
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        font-size: 9.5pt !important;
       }
       #page-attendance th.border-l-2, #page-attendance td.border-l-2 { width: 38px !important; }
 
+      /* ---------------------------------------------------------
+         3. 個人通知單設計
+         --------------------------------------------------------- */
       #page-reports { width: 100% !important; }
       #page-reports.flex { display: block !important; }
       #page-reports .report-page { 
         box-shadow: none !important; margin: 0 !important; width: 100% !important; 
-        min-height: 297mm !important; height: auto !important; page-break-after: always !important; break-after: page !important; 
+        min-height: 297mm !important; height: auto !important;
+        page-break-after: always !important; break-after: page !important; 
         padding: 15mm 20mm !important; 
       }
       #page-reports .report-page:last-child { page-break-after: auto !important; }
@@ -192,7 +228,9 @@
 </head>
 <body class="bg-gray-100 text-gray-800 min-h-screen flex flex-col antialiased">
 
-  <!-- 頂部導覽列 -->
+  <!-- =========================================================
+       頂部導覽列 (Portal Header)
+       ========================================================= -->
   <header id="top-portal-nav" class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm no-print">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
@@ -226,34 +264,24 @@
     </div>
   </header>
 
-  <!-- 系統 1：作業與出缺勤系統 -->
+  <!-- =========================================================
+       系統 1：作業與出缺勤系統
+       ========================================================= -->
   <div id="module-homework" class="flex-1 flex overflow-hidden">
     <div class="w-full h-full flex flex-col md:flex-row overflow-hidden">
       
       <!-- 側邊欄 -->
-      <div class="sidebar w-full md:w-56 bg-gray-800 text-white flex flex-col flex-shrink-0 z-40 shadow-lg no-print">
-        
-        <!-- 登入與權限狀態欄 -->
-        <div class="p-3 bg-gray-900 border-b border-gray-700 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span id="authStatusIndicator" class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
-            <span id="authStatusText" class="text-xs font-bold text-amber-300">訪客檢視 (唯讀)</span>
-          </div>
-          <button id="authBtn" onclick="app.toggleAuthModal()" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-xs font-bold transition">登入</button>
-        </div>
-
+      <div class="sidebar w-full md:w-48 bg-gray-800 text-white flex flex-col flex-shrink-0 z-40 shadow-lg no-print">
         <div class="p-4 border-b border-gray-700 flex items-center justify-between">
           <h1 class="text-lg font-bold">國小出缺勤紀錄</h1>
-          <button onclick="app.fetchRemoteData()" title="重新整理雲端資料" class="text-gray-400 hover:text-white transition"><i class="fa-solid fa-rotate"></i></button>
         </div>
-
         <div class="p-4">
           <label class="text-xs text-gray-400 uppercase">目前班級</label>
           <div class="flex gap-2 mt-1">
             <select id="classSelect" class="flex-1 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none"></select>
-            <button onclick="app.renameCurrentClass()" class="admin-only bg-gray-600 hover:bg-gray-500 text-white px-3 rounded border border-gray-500 disabled:opacity-30 disabled:cursor-not-allowed"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="app.renameCurrentClass()" class="bg-gray-600 hover:bg-gray-500 text-white px-3 rounded border border-gray-500"><i class="fa-solid fa-pen"></i></button>
           </div>
-          <button onclick="app.configureSubjects()" class="admin-only mt-4 w-full text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 rounded border border-gray-600 flex items-center justify-center gap-2 transition disabled:opacity-30 disabled:cursor-not-allowed"><i class="fa-solid fa-gear"></i> 設定作業科目</button>
+          <button onclick="app.configureSubjects()" class="mt-4 w-full text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 rounded border border-gray-600 flex items-center justify-center gap-2 transition"><i class="fa-solid fa-gear"></i> 設定作業科目</button>
         </div>
         
         <nav class="flex-1 p-2 space-y-1 overflow-y-auto">
@@ -265,9 +293,9 @@
         </nav>
         
         <div class="p-4 border-t border-gray-700 bg-gray-900 space-y-2">
-          <button onclick="app.upgradeNewAcademicYear()" class="admin-only text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 w-full transition font-semibold disabled:opacity-30 disabled:cursor-not-allowed"><i class="fa-solid fa-graduation-cap w-4"></i> 升級新學年</button>
+          <button onclick="app.upgradeNewAcademicYear()" class="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 w-full transition font-semibold"><i class="fa-solid fa-graduation-cap w-4"></i> 升級新學年</button>
           <button onclick="app.exportData()" class="text-xs text-gray-400 hover:text-white flex items-center gap-1 w-full"><i class="fa-solid fa-download w-4"></i> 備份資料</button>
-          <label class="admin-only text-xs text-gray-400 hover:text-white flex items-center gap-1 cursor-pointer w-full"><i class="fa-solid fa-upload w-4"></i> 匯入備份<input type="file" id="importFile" class="hidden" accept=".json" onchange="app.importData(this)"></label>
+          <label class="text-xs text-gray-400 hover:text-white flex items-center gap-1 cursor-pointer w-full"><i class="fa-solid fa-upload w-4"></i> 匯入備份<input type="file" id="importFile" class="hidden" accept=".json" onchange="app.importData(this)"></label>
         </div>
       </div>
 
@@ -316,7 +344,6 @@
 
             <div class="mt-4 text-sm text-gray-500 no-print">
               * 點擊切換：<span class="inline-block px-2 border bg-white">空</span>(完成) ⮕ <span class="inline-block px-2 border bg-red-100 text-red-600 font-bold">X</span>(缺交) ⮕ <span class="inline-block px-2 border bg-yellow-100 text-yellow-600 font-bold">△</span>(補交未完)
-              <span id="entryReadonlyNotice" class="text-amber-600 font-bold ml-2">【唯讀檢視模式：無法編輯】</span>
             </div>
           </div>
         </div>
@@ -355,10 +382,7 @@
               <div class="text-sm font-bold">導師簽名：__________________</div>
             </div>
 
-            <div class="mt-4 text-sm text-gray-500 no-print">
-              * 狀態循環：空(到) ⮕ △(遲/早) ⮕ □(病) ⮕ ○(事) ⮕ ☆(he)他
-              <span id="attReadonlyNotice" class="text-amber-600 font-bold ml-2">【唯讀檢視模式：無法編輯】</span>
-            </div>
+            <div class="mt-4 text-sm text-gray-500 no-print">* 狀態循環：空(到) ⮕ △(遲/早) ⮕ □(病) ⮕ ○(事) ⮕ ☆(he)他</div>
           </div>
         </div>
 
@@ -374,8 +398,8 @@
                 <input type="date" id="statEndDate" class="border rounded p-1 text-sm" onchange="app.renderStats()">
               </div>
               <div class="flex gap-2">
-                <button onclick="app.saveStats()" class="admin-only bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm shadow flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"><i class="fa-solid fa-floppy-disk"></i> 儲存修訂</button>
-                <button onclick="app.resetStats()" class="admin-only bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm shadow flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"><i class="fa-solid fa-rotate-right"></i> 重置</button>
+                <button onclick="app.saveStats()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm shadow flex items-center gap-2"><i class="fa-solid fa-floppy-disk"></i> 儲存修訂</button>
+                <button onclick="app.resetStats()" class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm shadow flex items-center gap-2"><i class="fa-solid fa-rotate-right"></i> 重置</button>
                 <div class="w-px h-6 bg-gray-300 mx-1"></div>
                 <button onclick="app.exportExcel()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-sm shadow flex items-center gap-2"><i class="fa-solid fa-file-excel"></i> 匯出</button>
                 <button onclick="window.print()" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded text-sm shadow flex items-center gap-2"><i class="fa-solid fa-print"></i> 列印</button>
@@ -440,12 +464,12 @@
                   <form onsubmit="app.addStudent(event)" class="flex gap-4 items-end">
                     <div class="w-24"><label class="block text-sm font-medium text-gray-700 mb-1">座號</label><input type="number" id="newSeat" class="w-full border rounded p-2" min="1" required></div>
                     <div class="flex-1"><label class="block text-sm font-medium text-gray-700 mb-1">姓名</label><input type="text" id="newName" class="w-full border rounded p-2" required placeholder="輸入姓名"></div>
-                    <button type="submit" class="admin-only bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition disabled:opacity-30 disabled:cursor-not-allowed"><i class="fa-solid fa-plus"></i></button>
+                    <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition"><i class="fa-solid fa-plus"></i></button>
                   </form>
                 </div>
                 <div class="bg-indigo-50 p-6 rounded-lg shadow-md border border-indigo-100">
                   <h3 class="font-bold text-lg mb-4 text-indigo-800">快速工具</h3>
-                  <button onclick="app.fillClass(25)" class="admin-only w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition shadow disabled:opacity-30 disabled:cursor-not-allowed"><i class="fa-solid fa-wand-magic-sparkles"></i> 一鍵補齊 1 ~ 25 號</button>
+                  <button onclick="app.fillClass(25)" class="w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition shadow"><i class="fa-solid fa-wand-magic-sparkles"></i> 一鍵補齊 1 ~ 25 號</button>
                 </div>
               </div>
               <div class="bg-white rounded-lg shadow border overflow-hidden">
@@ -461,7 +485,9 @@
     </div>
   </div>
 
-  <!-- 系統 2：教室狀況回報系統 (維持不變) -->
+  <!-- =========================================================
+       系統 2：教室狀況回報系統
+       ========================================================= -->
   <div id="module-classroom" class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8" style="display: none;">
     <div class="max-w-7xl mx-auto space-y-6">
       <div class="flex items-center justify-between bg-white p-3 rounded-2xl border border-gray-200 shadow-sm no-print">
@@ -482,6 +508,7 @@
         </button>
       </div>
 
+      <!-- 填寫頁 -->
       <div id="classroom-subview-submit" class="max-w-3xl mx-auto">
         <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 p-6 text-white">
@@ -526,6 +553,7 @@
         </div>
       </div>
 
+      <!-- 後台總覽 -->
       <div id="classroom-subview-admin" class="hidden space-y-6">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
@@ -567,6 +595,7 @@
     </div>
   </div>
 
+  <!-- 教室狀況報告：直向列印容器 -->
   <div id="print-container-school">
     <div style="max-width: 720px; margin: 0 auto; padding: 10px; background: #ffffff; color: #1e293b;">
       <div style="border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 16px;">
@@ -613,27 +642,11 @@
     </div>
   </div>
 
-  <!-- 系統 3：課後晚接記錄系統 (維持不變) -->
+  <!-- =========================================================
+       系統 3：均一國小部課後晚接記錄系統
+       ========================================================= -->
   <div id="module-pickup" class="flex-1 overflow-y-auto" style="display: none;">
     <div id="pickup-app-container"></div>
-  </div>
-
-  <!-- 登入對話框 (Auth Modal) -->
-  <div id="authModalOverlay" onclick="app.toggleAuthModal()">
-    <div id="authModal" onclick="event.stopPropagation()" class="p-6 space-y-4">
-      <div class="text-center">
-        <h3 class="text-lg font-black text-gray-800">作業與出缺勤管理登入</h3>
-        <p class="text-xs text-gray-500 mt-1">登入以解除唯讀限制並啟用雲端同步寫入</p>
-      </div>
-      <div>
-        <label class="block text-xs font-bold text-gray-700 mb-1">管理密碼</label>
-        <input type="password" id="authPasswordInput" class="w-full px-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="請輸入密碼 " onkeydown="if(event.key==='Enter') app.login();">
-      </div>
-      <div class="flex gap-2 pt-2">
-        <button onclick="app.toggleAuthModal()" class="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition">取消</button>
-        <button onclick="app.login()" class="flex-1 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition">確認登入</button>
-      </div>
-    </div>
   </div>
 
   <!-- 快選與明細彈窗 -->
@@ -721,9 +734,12 @@
     <span id="global-toast-msg">操作成功</span>
   </div>
 
+  <!-- =========================================================
+       JavaScript 核心運作腳本
+       ========================================================= -->
   <script>
     // ---------------------------------------------------------
-    // 1. 全域系統切換與 Toast
+    // 1. 全域系統切換
     // ---------------------------------------------------------
     function showGlobalToast(message, type = 'success') {
       const toast = document.getElementById('global-toast');
@@ -795,15 +811,10 @@
     };
 
     // ---------------------------------------------------------
-    // 2. 系統 1：作業與出缺勤管理邏輯 (GAS 試算表同步版)
+    // 2. 系統 1：作業與出缺勤管理邏輯
     // ---------------------------------------------------------
-    // ⚠️ 部署後請將您的 GAS 網頁應用程式 URL 貼於下方常數
-    const HOMEWORK_GAS_URL = "https://script.google.com/macros/s/AKfycbxJWMkL3d8IiXjZNDYpS0etCvAYMw9tOuKIXiEV0Awjvx1qtYp7pTrFzLfnqnxRj8T5tg/exec";
-
     const app = {
       currentTargetInfo: { sid: null, date: null }, 
-      isAdmin: false,
-      adminToken: "",
       data: {
         classes: [], subjects: ["工作本", "語文", "數學"], 
         currentClass: "", currentDate: new Date(), 
@@ -813,7 +824,6 @@
         includeSaturday: false
       },
       init() {
-        // 先讀取本地快取加快首頁載入
         const saved = localStorage.getItem('homework_data');
         let parsed = {};
         try { parsed = JSON.parse(saved) || {}; } catch(e){}
@@ -838,172 +848,7 @@
         document.getElementById('reportStartDate').value = sStr;
         document.getElementById('reportEndDate').value = eStr;
 
-        this.updateAuthUI();
         this.render();
-
-        // 非同步從 Google 試算表拉取最新資料
-        this.fetchRemoteData();
-      },
-
-      toggleAuthModal() {
-        if (this.isAdmin) {
-          if (confirm("確定要登出並切換回唯讀模式嗎？")) {
-            this.isAdmin = false;
-            this.adminToken = "";
-            this.updateAuthUI();
-            this.render();
-            showGlobalToast("已登出，目前處於唯讀狀態", "info");
-          }
-        } else {
-          document.getElementById('authPasswordInput').value = "";
-          document.getElementById('authModalOverlay').style.display = 'flex';
-          setTimeout(() => document.getElementById('authPasswordInput').focus(), 100);
-        }
-      },
-
-      login() {
-        const pwd = document.getElementById('authPasswordInput').value.trim();
-        if (!pwd) return alert("請輸入密碼！");
-
-        // 直接比對管理員密碼
-        if (pwd === "admin") {
-          this.isAdmin = true;
-          this.adminToken = pwd;
-          document.getElementById('authModalOverlay').style.display = 'none';
-          this.updateAuthUI();
-          this.render();
-          showGlobalToast("✅ 成功登入管理者模式，已擁有編輯權限！");
-        } else {
-          alert("登入失敗：密碼錯誤！(預設密碼為 admin)");
-        }
-      },
-
-      updateAuthUI() {
-        const ind = document.getElementById('authStatusIndicator');
-        const txt = document.getElementById('authStatusText');
-        const btn = document.getElementById('authBtn');
-        const entryNotice = document.getElementById('entryReadonlyNotice');
-        const attNotice = document.getElementById('attReadonlyNotice');
-
-        if (this.isAdmin) {
-          ind.className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
-          txt.className = "text-xs font-bold text-emerald-300";
-          txt.innerText = "管理員 (可編輯)";
-          btn.innerText = "登出";
-          btn.className = "px-2.5 py-1 bg-rose-600 hover:bg-rose-500 rounded text-xs font-bold transition";
-          if (entryNotice) entryNotice.style.display = "none";
-          if (attNotice) attNotice.style.display = "none";
-          document.body.classList.remove('readonly-mode');
-        } else {
-          ind.className = "w-2.5 h-2.5 rounded-full bg-amber-400";
-          txt.className = "text-xs font-bold text-amber-300";
-          txt.innerText = "訪客檢視 (唯讀)";
-          btn.innerText = "登入";
-          btn.className = "px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-xs font-bold transition";
-          if (entryNotice) entryNotice.style.display = "inline";
-          if (attNotice) attNotice.style.display = "inline";
-          document.body.classList.add('readonly-mode');
-        }
-
-        document.querySelectorAll('.admin-only').forEach(el => {
-          if (this.isAdmin) {
-            el.removeAttribute('disabled');
-            el.classList.remove('opacity-30', 'cursor-not-allowed', 'pointer-events-none');
-          } else {
-            el.setAttribute('disabled', 'true');
-            el.classList.add('opacity-30', 'cursor-not-allowed', 'pointer-events-none');
-          }
-        });
-      },
-
-      async fetchRemoteData() {
-        if (!HOMEWORK_GAS_URL.startsWith("http")) return;
-        const statusText = document.getElementById('authStatusText');
-        try {
-          showGlobalToast("正在從 Google 試算表拉取資料...", "info");
-          
-          let success = false;
-          let rawJson = null;
-
-          // 優先嘗試直連
-          try {
-            const res = await fetch(`${HOMEWORK_GAS_URL}?action=getData&t=${Date.now()}`, {
-              method: 'GET',
-              redirect: 'follow',
-              mode: 'cors'
-            });
-            if (res.ok) {
-              rawJson = await res.json();
-              if (rawJson && rawJson.status === "success") success = true;
-            }
-          } catch(e) {}
-
-          // 若直連遭瀏覽器 CORS 攔截，自動切換至安全跨域代理
-          if (!success) {
-            try {
-              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(HOMEWORK_GAS_URL + '?action=getData&t=' + Date.now())}`;
-              const res = await fetch(proxyUrl);
-              if (res.ok) {
-                rawJson = await res.json();
-                if (rawJson && rawJson.status === "success") success = true;
-              }
-            } catch(e2) {}
-          }
-
-          if (success && rawJson && rawJson.data && rawJson.data.classes) {
-            this.data.classes = rawJson.data.classes;
-            this.data.subjects = rawJson.data.subjects || this.data.subjects;
-            this.data.students = rawJson.data.students || [];
-            this.data.records = rawJson.data.records || {};
-            this.data.statsOverrides = rawJson.data.statsOverrides || {};
-            
-            if (!this.data.classes.includes(this.data.currentClass)) {
-              this.data.currentClass = this.data.classes[0];
-            }
-            
-            this.saveLocal();
-            this.renderClassSelect();
-            this.render();
-            showGlobalToast("✅ 已成功載入 Google 試算表資料！", "success");
-          } else {
-            // 試算表尚無資料或格式為空白時，仍正常渲染既有資料
-            this.render();
-          }
-        } catch(e) {
-          console.warn("GAS 讀取失敗，使用本機快取:", e);
-        }
-      },
-
-      async save() {
-        this.saveLocal();
-        if (!this.isAdmin) return;
-
-        if (HOMEWORK_GAS_URL.startsWith("http")) {
-          try {
-            showGlobalToast("正在上傳 Google 試算表...", "info");
-            
-            // 對齊教室通報系統傳輸方式：直接傳送純 JSON 物件，不進行 URL 編碼
-            await fetch(HOMEWORK_GAS_URL, {
-              method: 'POST',
-              mode: 'no-cors',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'saveData',
-                data: {
-                  classes: this.data.classes,
-                  subjects: this.data.subjects,
-                  students: this.data.students,
-                  records: this.data.records,
-                  statsOverrides: this.data.statsOverrides
-                }
-              })
-            });
-            showGlobalToast("✅ 已成功寫入 Google 試算表！", "success");
-          } catch(err) {
-            console.error("雲端存檔錯誤:", err);
-            showGlobalToast("同步雲端失敗", "error");
-          }
-        }
       },
 
       renderClassSelect() {
@@ -1023,7 +868,6 @@
       },
 
       renameCurrentClass() {
-        if (!this.isAdmin) return alert("唯讀模式下無法執行此操作，請先點選上方『登入』。");
         const old = this.data.currentClass;
         const n = prompt(`改名 (原: ${old})：`, old);
         if(n && n.trim() !== "" && n !== old){
@@ -1039,7 +883,6 @@
       },
 
       configureSubjects() {
-        if (!this.isAdmin) return alert("唯讀模式下無法執行此操作，請先點選上方『登入』。");
         const input = prompt("請輸入三個作業科目名稱，用逗號分隔：", this.data.subjects.join(", "));
         if (input) {
           const newSubs = input.split(/[,，]/).map(s=>s.trim()).filter(s=>s!=="");
@@ -1054,9 +897,11 @@
       },
 
       upgradeNewAcademicYear() {
-        if (!this.isAdmin) return alert("唯讀模式下無法執行此操作，請先點選上方『登入』。");
-        const confirm1 = confirm("⚠️ 核心設定變更：您即將執行【新學年全面升級】！\n\n1. 所有班級名稱內部的數字將自動加 1 年級。\n2. 升學孩子的所有歷史作業、出缺勤紀錄將完整保留。\n3. 原六年級畢業生名單與紀錄將自動清除封存。\n4. 一年級將重置為完全空白。確定要執行嗎？");
+        const confirm1 = confirm("⚠️ 核心設定變更：您即將執行【新學年全面升級】！\n\n1. 所有班級名稱內部的數字將自動加 1 年級。\n2. 升學孩子的所有歷史作業、出缺勤紀錄將完整複製保留。\n3. 原六年級畢業生名單與紀錄將自動清除封存。\n4. 一年級將重置為完全空白。確定要執行嗎？");
         if (!confirm1) return;
+
+        const confirm2 = confirm("🔥 安全防火牆：操作執行後將重新排序資料，建議您先備份。確認要執行歷史資料複製連動升級嗎？");
+        if (!confirm2) return;
 
         const incrementClassName = (name) => {
           const numMap = { '一':'二', '二':'三', '三':'四', '四':'五', '五':'六', '1':'2', '2':'3', '3':'4', '4':'5', '5':'6' };
@@ -1147,6 +992,16 @@
         this.render();
       },
 
+      save() {
+        localStorage.setItem('homework_data', JSON.stringify({
+          classes: this.data.classes,
+          subjects: this.data.subjects,
+          students: this.data.students,
+          records: this.data.records,
+          statsOverrides: this.data.statsOverrides
+        }));
+      },
+
       getWeekDays() {
         const arr = [];
         const c = new Date(this.data.currentDate);
@@ -1159,10 +1014,6 @@
       },
 
       toggleStatus(sid, d, subj) {
-        if (!this.isAdmin) {
-          showGlobalToast("唯讀狀態：請點選左側『登入』以進行修改", "info");
-          return;
-        }
         const k = `${sid}_${d}_${subj}`;
         const curr = this.data.records[k];
         let n = "";
@@ -1178,10 +1029,6 @@
       },
 
       toggleAttendance(sid, d, p) {
-        if (!this.isAdmin) {
-          showGlobalToast("唯讀狀態：請點選左側『登入』以進行修改", "info");
-          return;
-        }
         const k = `${sid}_${d}_ATT_${p}`;
         const curr = this.data.records[k];
         let n = "";
@@ -1327,7 +1174,7 @@
               else if(v === '☆') cls = "status-OTHER"; 
               
               const bCls = idx === 0 ? "border-l-2 border-gray-400" : ""; 
-              const menuAttr = (p === '1' && this.isAdmin) ? `oncontextmenu="app.showMenu(event, '${s.id}','${d}')"` : "";
+              const menuAttr = (p === '1') ? `oncontextmenu="app.showMenu(event, '${s.id}','${d}')"` : "";
 
               h += `<td class="grid-cell ${cls} ${bCls} text-xs screen-only" onclick="app.toggleAttendance('${s.id}','${d}','${p}')" ${menuAttr}>
                       <div class="cell-inner text-sm flex !justify-end pr-2">${v}</div>
@@ -1383,8 +1230,6 @@
         d.sort((a,b) => { if(sb==='seat') return a.seat-b.seat; if(sb==='hwX') return b.hX-a.hX; return 0; });
         if(d.length === 0) return tb.innerHTML = '<tr><td colspan="8" class="text-center p-4">無資料</td></tr>';
         
-        const readOnlyAttr = this.isAdmin ? "" : "readonly";
-
         d.forEach(s => {
           const tr = document.createElement('tr'); 
           tr.className = "hover:bg-gray-50 border-b";
@@ -1394,37 +1239,37 @@
             <td class="p-3 border font-medium">${s.name}</td>
             <td class="stat-container-cell bg-red-50">
               <div class="stat-input-wrapper">
-                <input type="number" id="stat_${s.id}_hX" value="${s.hX}" ${readOnlyAttr} class="stat-input text-red-600 ${bgClass}">
+                <input type="number" id="stat_${s.id}_hX" value="${s.hX}" class="stat-input text-red-600 ${bgClass}">
                 <i class="fa-solid fa-search search-btn" onclick="app.showStatDetails('${s.id}', '${s.name}', 'hX')" title="檢視缺交明細"></i>
               </div>
             </td>
             <td class="stat-container-cell bg-yellow-50">
               <div class="stat-input-wrapper">
-                <input type="number" id="stat_${s.id}_hT" value="${s.hT}" ${readOnlyAttr} class="stat-input text-yellow-600 ${bgClass}">
+                <input type="number" id="stat_${s.id}_hT" value="${s.hT}" class="stat-input text-yellow-600 ${bgClass}">
                 <i class="fa-solid fa-search search-btn" onclick="app.showStatDetails('${s.id}', '${s.name}', 'hT')" title="檢視補交明細"></i>
               </div>
             </td>
             <td class="stat-container-cell">
               <div class="stat-input-wrapper">
-                <input type="number" id="stat_${s.id}_aT" value="${s.aT}" ${readOnlyAttr} class="stat-input text-yellow-700 ${bgClass}">
+                <input type="number" id="stat_${s.id}_aT" value="${s.aT}" class="stat-input text-yellow-700 ${bgClass}">
                 <i class="fa-solid fa-search search-btn" onclick="app.showStatDetails('${s.id}', '${s.name}', 'aT')" title="檢視遲到明細"></i>
               </div>
             </td>
             <td class="stat-container-cell">
               <div class="stat-input-wrapper">
-                <input type="number" id="stat_${s.id}_aS" value="${s.aS}" ${readOnlyAttr} class="stat-input text-purple-700 ${bgClass}">
+                <input type="number" id="stat_${s.id}_aS" value="${s.aS}" class="stat-input text-purple-700 ${bgClass}">
                 <i class="fa-solid fa-search search-btn" onclick="app.showStatDetails('${s.id}', '${s.name}', 'aS')" title="檢視病假明細"></i>
               </div>
             </td>
             <td class="stat-container-cell">
               <div class="stat-input-wrapper">
-                <input type="number" id="stat_${s.id}_aL" value="${s.aL}" ${readOnlyAttr} class="stat-input text-blue-700 ${bgClass}">
+                <input type="number" id="stat_${s.id}_aL" value="${s.aL}" class="stat-input text-blue-700 ${bgClass}">
                 <i class="fa-solid fa-search search-btn" onclick="app.showStatDetails('${s.id}', '${s.name}', 'aL')" title="檢視事假明細"></i>
               </div>
             </td>
             <td class="stat-container-cell">
               <div class="stat-input-wrapper">
-                <input type="number" id="stat_${s.id}_aO" value="${s.aO}" ${readOnlyAttr} class="stat-input text-green-700 ${bgClass}">
+                <input type="number" id="stat_${s.id}_aO" value="${s.aO}" class="stat-input text-green-700 ${bgClass}">
                 <i class="fa-solid fa-search search-btn" onclick="app.showStatDetails('${s.id}', '${s.name}', 'aO')" title="檢視其他明細"></i>
               </div>
             </td>
@@ -1434,7 +1279,6 @@
       },
 
       saveStats() {
-        if (!this.isAdmin) return alert("唯讀模式下無法執行此操作！");
         const st = this.data.students.filter(s => s.class === this.data.currentClass);
         st.forEach(s => {
           const hX = parseInt(document.getElementById(`stat_${s.id}_hX`).value) || 0;
@@ -1447,11 +1291,10 @@
         });
         this.save();
         this.renderStats();
-        alert("統計數據已手動修訂並儲存至雲端！");
+        alert("統計數據已手動修訂並儲存！");
       },
 
       resetStats() {
-        if (!this.isAdmin) return alert("唯讀模式下無法執行此操作！");
         if(!confirm("確定要清除所有手動修改的數據，恢復成系統自動計算嗎？")) return;
         const st = this.data.students.filter(s => s.class === this.data.currentClass);
         st.forEach(s => { delete this.data.statsOverrides[s.id]; });
@@ -1590,14 +1433,13 @@
         lst.innerHTML = '';
         const st = this.data.students.filter(s => s.class === this.data.currentClass);
         if(st.length === 0) return lst.innerHTML = '<li class="p-4 text-center">無學生資料，請點上方補齊座號或手寫新增</li>';
-        
         st.forEach(s => {
           const li = document.createElement('li');
           li.className = "p-3 flex items-center hover:bg-gray-50 gap-4";
           li.innerHTML = `
             <div class="w-10 text-center font-bold bg-gray-200 border">${s.seat}</div>
-            <input value="${s.name}" ${this.isAdmin ? '' : 'readonly'} class="flex-1 border-b bg-transparent" onchange="app.updateStudentName('${s.id}',this.value)" placeholder="未登入無法修改姓名">
-            <button onclick="app.deleteStudent('${s.id}')" class="admin-only text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"><i class="fa-solid fa-trash"></i></button>
+            <input value="${s.name}" class="flex-1 border-b bg-transparent" onchange="app.updateStudentName('${s.id}',this.value)" placeholder="點擊登錄學生姓名">
+            <button onclick="app.deleteStudent('${s.id}')" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-trash"></i></button>
           `;
           lst.appendChild(li);
         });
@@ -1605,7 +1447,6 @@
 
       addStudent(e) {
         e.preventDefault();
-        if (!this.isAdmin) return alert("唯讀模式下無法執行此操作！");
         const s = parseInt(document.getElementById('newSeat').value);
         const n = document.getElementById('newName').value.trim();
         if(this.data.students.some(x => x.class === this.data.currentClass && x.seat === s)) return alert("座號重複");
@@ -1619,7 +1460,6 @@
       },
 
       fillClass(cnt) {
-        if (!this.isAdmin) return alert("唯讀模式下無法執行此操作！");
         if(!confirm(`確定補齊 1~${cnt} 號？`)) return;
         const now = Date.now();
         for(let i = 1; i <= cnt; i++){
@@ -1633,13 +1473,11 @@
       },
 
       updateStudentName(id, v) {
-        if (!this.isAdmin) return;
         const s = this.data.students.find(x => x.id === id);
         if(s){ s.name = v.trim(); this.save(); }
       },
 
       deleteStudent(id) {
-        if (!this.isAdmin) return alert("唯讀模式下無法執行此操作！");
         if(confirm("刪除？")){
           this.data.students = this.data.students.filter(s => s.id !== id);
           Object.keys(this.data.records).forEach(k => { if(k.startsWith(id + '_')) delete this.data.records[k]; });
@@ -1650,7 +1488,6 @@
 
       showMenu(e, sid, date) {
         e.preventDefault();
-        if (!this.isAdmin) return;
         this.currentTargetInfo = { sid, date };
         document.getElementById('modalTitle').textContent = `${this.formatDateROC(date)} 快填選單`;
         document.getElementById('modalOverlay').style.display = 'flex';
@@ -1659,7 +1496,6 @@
         document.getElementById('modalOverlay').style.display = 'none';
       },
       batchFill(range, val) {
-        if (!this.isAdmin) return;
         const { sid, date } = this.currentTargetInfo;
         if(!sid || !date) return;
         const targets = range === 'am' ? ['1', '2', '3', '4'] : ['1', '2', '3', '4', '5', '6', '7'];
@@ -1703,50 +1539,25 @@
         a.click();
       },
 
-      async importData(el) {
-        if (!this.isAdmin) {
-          alert("唯讀狀態無法匯入資料！請先點選左側『登入』解鎖權限後再執行匯入。");
-          el.value = "";
-          return;
-        }
-
+      importData(el) {
         const file = el.files && el.files[0];
         if (!file) return;
         
         const reader = new FileReader();
-        reader.onload = async (e) => {
-          let parsedData = null;
+        reader.onload = (e) => {
           try {
-            parsedData = JSON.parse(e.target.result);
-          } catch (jsonErr) {
-            alert("檔案格式錯誤：這不是標準的 JSON 備份檔案！");
-            el.value = "";
-            return;
-          }
-
-          if (confirm("確定要匯入備份資料並立即同步至 Google 試算表嗎？")) {
-            showGlobalToast("正在更新本機並上傳試算表，請稍候...", "info");
-
-            // 1. 先寫入本機資料並即時渲染畫面
-            this.data.classes = parsedData.classes || this.data.classes;
-            this.data.subjects = parsedData.subjects || this.data.subjects;
-            this.data.students = parsedData.students || [];
-            this.data.records = parsedData.records || {};
-            this.data.statsOverrides = parsedData.statsOverrides || {};
-
-            this.renderClassSelect();
-            this.render();
-            el.value = "";
-
-            // 2. 執行雲端試算表同步
-            try {
-              await this.save();
-              showGlobalToast("🎉 資料已成功匯入並同步至試算表！", "success");
-            } catch(syncErr) {
-              console.error("Sync Error:", syncErr);
-              showGlobalToast("資料已匯入本機，但雲端同步失敗", "error");
+            const parsedData = JSON.parse(e.target.result);
+            if (confirm("確定要匯入備份資料嗎？這將會覆蓋目前所有班級與學生的紀錄。")) {
+              this.data = { ...this.data, ...parsedData };
+              this.save();
+              this.renderClassSelect();
+              this.render();
+              el.value = "";
+              alert("資料匯入成功！");
             }
-          } else {
+          } catch(err) {
+            console.error("Import Error:", err);
+            alert("檔案格式錯誤，請確認是否為正確的備份 JSON 檔案。");
             el.value = "";
           }
         };
@@ -1755,7 +1566,7 @@
     };
 
     // ---------------------------------------------------------
-    // 3. 系統 2：教室狀況回報系統 (維持不變)
+    // 3. 系統 2：教室狀況回報系統
     // ---------------------------------------------------------
     const CLASSROOM_GAS_URL = "https://script.google.com/macros/s/AKfycbxXzRP9qPOhgq3tcLDpbli3pPVkGiU6Sbk9V1yadZgsm1ZjgjxdXlg69koB3kaxvmn4/exec";
     let schoolReportsList = [];
@@ -2160,7 +1971,7 @@
     }
 
     // ---------------------------------------------------------
-    // 4. 系統 3：課後晚接記錄系統 (維持不變)
+    // 4. 系統 3：課後晚接記錄系統
     // ---------------------------------------------------------
     const PICKUP_GAS_URL = "https://script.google.com/macros/s/AKfycbxidUn1nAfCp1FRffupl9MEeW7K7WeN1jhRAuBgm1gTlERsBtHFlV-O5rGrRNdibKfR/exec";
     let pickupState = {
