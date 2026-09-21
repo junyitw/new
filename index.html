@@ -1429,7 +1429,7 @@
 
       saveStats() {
         if (!this.data.isLoggedIn) return alert("❌ 權限不足：請先點擊右上角「教師登入」才能儲存修訂！");
-        const st = this.data.students.filter(s => s.class === this.data.currentClass);
+        const st = this.data.students; // 移除班級限制，直接抓取所有學生
         st.forEach(s => {
           const hX = parseInt(document.getElementById(`stat_${s.id}_hX`).value) || 0;
           const hT = parseInt(document.getElementById(`stat_${s.id}_hT`).value) || 0;
@@ -1447,7 +1447,7 @@
       resetStats() {
         if (!this.data.isLoggedIn) return alert("❌ 權限不足：請先點擊右上角「教師登入」才能重置數據！");
         if(!confirm("確定要清除所有手動修改的數據，恢復成系統自動計算嗎？")) return;
-        const st = this.data.students.filter(s => s.class === this.data.currentClass);
+        const st = this.data.students; // 移除班級限制，直接抓取所有學生
         st.forEach(s => { delete this.data.statsOverrides[s.id]; });
         this.save();
         this.renderStats();
