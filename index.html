@@ -1618,6 +1618,9 @@
       },
 
       exportData() {
+        if (!this.data.isLoggedIn) {
+          return alert("❌ 權限不足：請先點擊右上角「教師登入」才能備份匯出資料！");
+        }
         const data = {
           classes: this.data.classes,
           subjects: this.data.subjects,
