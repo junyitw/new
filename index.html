@@ -106,7 +106,7 @@
     #print-container-school { display: none; }
 
     /* =========================================================
-       🖨️ 列印專用樣式調校（單頁規格修正）
+       🖨️ 列印專用樣式調校（單頁完美比例無裁切）
        ========================================================= */
     @media print {
       @page { size: landscape; margin: 4mm 5mm 4mm 5mm; }
@@ -114,7 +114,6 @@
       
       .no-print, .sidebar, .top-toolbar, .mt-4, header, nav, #top-portal-nav, #module-classroom, #module-pickup { display: none !important; }
       
-      /* 解除所有外層與包裹 div 寬度限制，強制 100% 貼齊列印頁面 */
       html, body, #module-homework, .main-container, .table-container, .table-container > div {
         overflow: visible !important;
         height: auto !important;
@@ -144,9 +143,7 @@
       table { width: 100% !important; table-layout: fixed !important; }
       .sticky-seat, .name-cell, thead { position: static !important; }
       
-      /* ---------------------------------------------------------
-         1. 作業登記列印優化
-         --------------------------------------------------------- */
+      /* --- 1. 作業登記列印優化 --- */
       #page-entry table { width: 100% !important; font-size: 8.5pt !important; border: 2px solid black !important; }
       #page-entry th, #page-entry td { border: 1px solid black !important; padding: 1px 1px !important; height: 1.25rem !important; }
       #page-entry tr { height: 1.25rem !important; }
@@ -164,10 +161,11 @@
       
       #page-entry th.sticky-seat, #page-entry td.sticky-seat { width: 28px !important; min-width: 28px !important; }
       #page-entry th.name-cell, #page-entry td.name-cell { 
-        width: 120px !important; 
+        width: 14% !important; 
+        min-width: 95px !important;
         max-width: none !important;
         text-align: center !important; 
-        padding-left: 0 !important; 
+        padding: 0 2px !important; 
         white-space: nowrap !important;
         overflow: visible !important;
         text-overflow: clip !important;
@@ -178,9 +176,7 @@
       .status-X { background-color: #fee2e2 !important; color: #dc2626 !important; }
       .status-TRI { background-color: #fef9c3 !important; color: #ca8a04 !important; }
 
-      /* ---------------------------------------------------------
-         2. 出缺勤紀錄表列印優化 (徹底解決溢出與姓名省略截斷)
-         --------------------------------------------------------- */
+      /* --- 2. 出缺勤紀錄表列印優化 --- */
       #page-attendance table { width: 100% !important; font-size: 9pt !important; border: 2px solid black !important; } 
       #page-attendance .screen-only { display: none !important; }
       #page-attendance .print-only-cell { display: table-cell !important; }
@@ -197,20 +193,20 @@
       
       #page-attendance th.sticky-seat, #page-attendance td.sticky-seat { width: 30px !important; min-width: 30px !important; }
       #page-attendance th.name-cell, #page-attendance td.name-cell { 
-        width: 130px !important; 
+        width: 16% !important; 
+        min-width: 110px !important;
         max-width: none !important;
         text-align: center !important; 
-        padding-left: 0 !important; 
+        padding: 0 2px !important; 
         white-space: nowrap !important;
         overflow: visible !important;
         text-overflow: clip !important;
         font-size: 9.5pt !important;
       }
-      #page-attendance th.border-l-2, #page-attendance td.border-l-2 { width: 38px !important; }
+      #page-attendance th.print-only-cell, #page-attendance td.print-only-cell { width: auto !important; }
+      #page-attendance th:last-child, #page-attendance td:last-child { width: 45px !important; min-width: 45px !important; }
 
-      /* ---------------------------------------------------------
-         3. 個人通知單設計
-         --------------------------------------------------------- */
+      /* --- 3. 個人通知單設計 --- */
       #page-reports { width: 100% !important; }
       #page-reports.flex { display: block !important; }
       #page-reports .report-page { 
@@ -905,7 +901,7 @@
 
         const incrementClassName = (name) => {
           const numMap = { '一':'二', '二':'三', '三':'四', '四':'五', '五':'六', '1':'2', '2':'3', '3':'4', '4':'5', '5':'6' };
-          return name.replace(/[一二三四五12345]/g, (match) => numMap[match] || match);
+          return name.replace(/[一二三四五12345]/g, (m) => numMap[m] || m);
         };
 
         const graduationClass = this.data.classes[5];
@@ -1179,7 +1175,7 @@
               h += `<td class="grid-cell ${cls} ${bCls} text-xs screen-only" onclick="app.toggleAttendance('${s.id}','${d}','${p}')" ${menuAttr}>
                       <div class="cell-inner text-sm flex !justify-end pr-2">${v}</div>
                     </td>`; 
-            });
+            }); 
             h += `<td class="grid-cell print-only-cell"></td>`; 
           }); 
           
@@ -1548,7 +1544,14 @@
           try {
             const parsedData = JSON.parse(e.target.result);
             if (confirm("確定要匯入備份資料嗎？這將會覆蓋目前所有班級與學生的紀錄。")) {
-              this.data = { ...this.data, ...parsedData };
+              this.data.classes = parsedData.classes || this.data.classes;
+              this.data.subjects = parsedData.subjects || this.data.subjects;
+              this.data.students = parsedData.students || [];
+              this.data.records = parsedData.records || {};
+              this.data.statsOverrides = parsedData.statsOverrides || {};
+              if (this.data.classes.length > 0) {
+                this.data.currentClass = this.data.classes[0];
+              }
               this.save();
               this.renderClassSelect();
               this.render();
