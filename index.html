@@ -942,11 +942,25 @@
         const sel = document.getElementById('classSelect');
         if (!sel) return;
         sel.innerHTML = '';
-        this.data.classes.forEach(c => {
+        
+        // 🌟 依照班級名稱內的數字（1~6年級）進行升冪排序
+        const sortedClasses = [...this.data.classes].sort((a, b) => {
+          const numA = parseInt(a.replace(/[^0-9]/g, '')) || 0;
+          const numB = parseInt(b.replace(/[^0-9]/g, '')) || 0;
+          return numA - numB;
+        });
+
+        sortedClasses.forEach(c => {
           const o = document.createElement('option');
           o.value = c; o.textContent = c;
           sel.appendChild(o);
         });
+        
+        // 如果目前選取的班級不在排序後清單中，預設選第一個
+        if (!sortedClasses.includes(this.data.currentClass) && sortedClasses.length > 0) {
+          this.data.currentClass = sortedClasses[0];
+        }
+        
         sel.value = this.data.currentClass;
         sel.onchange = e => {
           this.data.currentClass = e.target.value;
