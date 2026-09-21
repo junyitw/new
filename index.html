@@ -1086,7 +1086,7 @@
         this.render();
       },
 
-      async save() {
+      async save(specificKey = null, specificVal = null) {
         const payload = {
           classes: this.data.classes,
           subjects: this.data.subjects,
@@ -1095,18 +1095,34 @@
           statsOverrides: this.data.statsOverrides
         };
 
+        // 1. 隨時更新本機快取
         localStorage.setItem('homework_data', JSON.stringify(payload));
 
-        try {
-          await fetch(HOMEWORK_GAS_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'syncAll', data: payload })
-          });
-          console.log("雲端同步成功");
-        } catch (err) {
-          console.warn("雲端同步失敗，已僅存本機", err);
+        // 2. 如果有指定單一變動的 key 與 val，則進行快速增量更新
+        if (specificKey !== null) {
+          try {
+            await fetch(HOMEWORK_GAS_URL, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'updateRecord', key: specificKey, value: specificVal })
+            });
+            console.log("增量同步成功: ", specificKey);
+          } catch (err) {
+            console.warn("增量同步失敗", err);
+          }
+        } else {
+          // 若為整批匯入或整批修改，則走原本的 syncAll
+          try {
+            await fetch(HOMEWORK_GAS_URL, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'syncAll', data: payload })
+            });
+          } catch (err) {
+            console.warn("全量同步失敗", err);
+          }
         }
       },
 
