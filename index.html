@@ -145,7 +145,7 @@
       table { width: 100% !important; table-layout: fixed !important; }
       .sticky-seat, .name-cell, thead { position: static !important; }
       
-      /* --- 1. 作業登記列印優化 --- */
+      /* 1. 作業登記列印優化 */
       #page-entry table { width: 100% !important; font-size: 8.5pt !important; border: 2px solid black !important; }
       #page-entry th, #page-entry td { border: 1px solid black !important; padding: 1px 1px !important; height: 1.25rem !important; }
       #page-entry tr { height: 1.25rem !important; }
@@ -178,7 +178,7 @@
       .status-X { background-color: #fee2e2 !important; color: #dc2626 !important; }
       .status-TRI { background-color: #fef9c3 !important; color: #ca8a04 !important; }
 
-      /* --- 2. 出缺勤紀錄表列印優化 --- */
+      /* 2. 出缺勤紀錄表列印優化 */
       #page-attendance table { width: 100% !important; font-size: 9pt !important; border: 2px solid black !important; } 
       #page-attendance .screen-only { display: none !important; }
       #page-attendance .print-only-cell { display: table-cell !important; }
@@ -208,7 +208,7 @@
       #page-attendance th.print-only-cell, #page-attendance td.print-only-cell { width: auto !important; }
       #page-attendance th:last-child, #page-attendance td:last-child { width: 45px !important; min-width: 45px !important; }
 
-      /* --- 3. 個人通知單設計 --- */
+      /* 3. 個人通知單設計 */
       #page-reports { width: 100% !important; }
       #page-reports.flex { display: block !important; }
       #page-reports .report-page { 
@@ -291,6 +291,7 @@
         </nav>
         
         <div class="p-4 border-t border-gray-700 bg-gray-900 space-y-2">
+          <button onclick="app.pullAllFromCloud()" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 w-full transition font-semibold"><i class="fa-solid fa-cloud-arrow-down w-4"></i> 同步雲端最新</button>
           <button onclick="app.upgradeNewAcademicYear()" class="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 w-full transition font-semibold"><i class="fa-solid fa-graduation-cap w-4"></i> 升級新學年</button>
           <button onclick="app.exportData()" class="text-xs text-gray-400 hover:text-white flex items-center gap-1 w-full"><i class="fa-solid fa-download w-4"></i> 備份資料</button>
           <label class="text-xs text-gray-400 hover:text-white flex items-center gap-1 cursor-pointer w-full"><i class="fa-solid fa-upload w-4"></i> 匯入備份<input type="file" id="importFile" class="hidden" accept=".json" onchange="app.importData(this)"></label>
@@ -320,6 +321,11 @@
               <button id="btnToggleSatEntry" onclick="app.toggleSaturday()" class="px-3 py-1 text-sm font-semibold rounded border border-amber-500 text-amber-700 bg-amber-50 hover:bg-amber-100 flex items-center gap-1 transition">
                 <i class="fa-solid fa-calendar-plus"></i> <span>啟用補課週六</span>
               </button>
+
+              <!-- 🌟 雲端同步狀態提示徽章 -->
+              <span id="homework-sync-status" class="text-xs font-bold text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                <i class="fa-solid fa-check"></i> 雲端已同步
+              </span>
             </div>
             <div class="flex items-center gap-3">
               <button id="authLoginBtn" onclick="app.toggleAuth()" class="px-4 py-2 rounded text-sm font-bold shadow flex items-center gap-2 bg-gray-200 text-gray-700 hover:bg-gray-300 transition">
@@ -815,12 +821,15 @@
     };
 
     // ---------------------------------------------------------
-    // 2. 系統 1：作業與出缺勤管理邏輯
+    // 2. 系統 1：作業與出缺勤管理邏輯 (防抖佇列延遲推播升級版)
     // ---------------------------------------------------------
     const HOMEWORK_GAS_URL = "https://script.google.com/macros/s/AKfycbza6pT9TLzdn30hZslPO1wMFe-PZfPai56jH6hieJ3uYNQRhMaGeoWPWj3fhMJXalZzEw/exec";
     
     const app = {
       currentTargetInfo: { sid: null, date: null }, 
+      syncTimer: null,          // 🌟 防抖佇列計時器
+      isSyncing: false,         // 🌟 是否正在發送網路請求中
+      hasPendingSync: false,    // 🌟 是否有尚未同步的後續變更
       data: {
         classes: [], subjects: ["工作本", "語文", "數學"], 
         currentClass: "", currentDate: new Date(), 
@@ -831,47 +840,17 @@
         isLoggedIn: false
       },
       
-      async init() {
-        showGlobalToast("正在從雲端同步作業與出缺勤資料...", "info");
+      // 🌟 修正後的 init：先顯示本機畫面，再於背景悄悄同步雲端
+      init() {
+        const saved = localStorage.getItem('homework_data');
+        let parsed = {};
+        try { parsed = JSON.parse(saved) || {}; } catch(e){}
         
-        let cloudLoaded = false;
-        try {
-          const res = await fetch(`${HOMEWORK_GAS_URL}?action=getData`);
-          const json = await res.json();
-          if (json.status === 'success' && json.data) {
-            this.data.classes = json.data.classes || ["1年級", "2年級", "3年級", "4年級", "5年級", "6年級"];
-            this.data.subjects = json.data.subjects || ["工作本", "語文", "數學"];
-            this.data.students = json.data.students || [];
-            this.data.records = json.data.records || {};
-this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行接收雲端覆寫資料
-            
-            localStorage.setItem('homework_data', JSON.stringify({
-              classes: this.data.classes,
-              subjects: this.data.subjects,
-              students: this.data.students,
-              records: this.data.records,
-              statsOverrides: this.data.statsOverrides
-            }));
-            cloudLoaded = true;
-            showGlobalToast("✅ 雲端資料同步成功！");
-          }
-        } catch (err) {
-          console.warn("無法連線至雲端，改用本機快取", err);
-        }
-
-        if (!cloudLoaded) {
-          const saved = localStorage.getItem('homework_data');
-          let parsed = {};
-          try { parsed = JSON.parse(saved) || {}; } catch(e){}
-          
-          this.data.classes = parsed.classes || ["1年級", "2年級", "3年級", "4年級", "5年級", "6年級"];
-          this.data.students = parsed.students || [];
-          this.data.records = parsed.records || {};
-          this.data.statsOverrides = parsed.statsOverrides || {}; 
-          if(parsed.subjects) this.data.subjects = parsed.subjects;
-          showGlobalToast("⚠️ 目前使用本機快取資料", "info");
-        }
-
+        this.data.classes = parsed.classes || ["1年級", "2年級", "3年級", "4年級", "5年級", "6年級"];
+        this.data.subjects = parsed.subjects || ["工作本", "語文", "數學"];
+        this.data.students = parsed.students || [];
+        this.data.records = parsed.records || {};
+        this.data.statsOverrides = parsed.statsOverrides || {}; 
         this.data.currentClass = this.data.classes[0];
         
         this.renderClassSelect();
@@ -882,12 +861,150 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
         oneMonthAgo.setDate(today.getDate() - 30);
         const sStr = oneMonthAgo.toISOString().split('T')[0];
         const eStr = today.toISOString().split('T')[0];
-        document.getElementById('statStartDate').value = sStr;
-        document.getElementById('statEndDate').value = eStr;
-        document.getElementById('reportStartDate').value = sStr;
-        document.getElementById('reportEndDate').value = eStr;
+        const sStart = document.getElementById('statStartDate');
+        const sEnd = document.getElementById('statEndDate');
+        const rStart = document.getElementById('reportStartDate');
+        const rEnd = document.getElementById('reportEndDate');
+        if (sStart) sStart.value = sStr;
+        if (sEnd) sEnd.value = eStr;
+        if (rStart) rStart.value = sStr;
+        if (rEnd) rEnd.value = eStr;
 
         this.render();
+        this.fetchCloudDataInBackground();
+      },
+
+      async fetchCloudDataInBackground() {
+        if (!HOMEWORK_GAS_URL) {
+          this.updateSyncUI('ready');
+          return;
+        }
+
+        this.updateSyncUI('syncing');
+        try {
+          const res = await fetch(`${HOMEWORK_GAS_URL}?action=getData`);
+          if (!res.ok) throw new Error("HTTP error " + res.status);
+          const json = await res.json();
+          if (json.status === 'success' && json.data) {
+            const d = json.data;
+            if (d.classes && d.classes.length > 0) this.data.classes = d.classes;
+            if (d.subjects) this.data.subjects = d.subjects;
+            if (d.students) this.data.students = d.students;
+            if (d.records) this.data.records = d.records;
+            if (d.statsOverrides) this.data.statsOverrides = d.statsOverrides;
+            
+            this.saveLocal();
+            this.renderClassSelect();
+            this.render();
+            this.updateSyncUI('ready');
+            showGlobalToast("✅ 雲端資料同步完成！");
+          }
+        } catch (err) {
+          console.warn("雲端背景同步延遲/失敗，維持本機資料：", err);
+          this.updateSyncUI('error');
+        }
+      },
+
+      // 🌟 雲端同步狀態提示 UI 控制
+      updateSyncUI(status) {
+        const el = document.getElementById('homework-sync-status');
+        if (!el) return;
+        if (status === 'syncing') {
+          el.className = "text-xs font-bold text-amber-600 flex items-center gap-1.5 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200";
+          el.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 雲端同步中...`;
+        } else if (status === 'pending') {
+          el.className = "text-xs font-bold text-blue-600 flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200";
+          el.innerHTML = `<i class="fa-solid fa-clock"></i> 等候排程同步 (1.5s)`;
+        } else if (status === 'error') {
+          el.className = "text-xs font-bold text-rose-600 flex items-center gap-1.5 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200";
+          el.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 本機暫存 (未同步)`;
+        } else {
+          el.className = "text-xs font-bold text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200";
+          el.innerHTML = `<i class="fa-solid fa-check"></i> 雲端已同步`;
+        }
+      },
+
+      // 🌟 核心防抖機制：延遲 1.5 秒打包送出
+      scheduleCloudSync() {
+        this.updateSyncUI('pending');
+        if (this.syncTimer) clearTimeout(this.syncTimer);
+
+        this.syncTimer = setTimeout(() => {
+          this.pushAllRecordsToCloud();
+        }, 1500);
+      },
+
+      // 🌟 全量批次打包推播至 Google 試算表
+      async pushAllRecordsToCloud() {
+        if (!HOMEWORK_GAS_URL) {
+          this.updateSyncUI('ready');
+          return;
+        }
+
+        if (this.isSyncing) {
+          this.hasPendingSync = true;
+          return;
+        }
+
+        this.isSyncing = true;
+        this.updateSyncUI('syncing');
+
+        const payload = {
+          classes: this.data.classes,
+          subjects: this.data.subjects,
+          students: this.data.students,
+          records: this.data.records,
+          statsOverrides: this.data.statsOverrides
+        };
+
+        try {
+          await fetch(HOMEWORK_GAS_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'syncAll', data: payload })
+          });
+
+          this.updateSyncUI('ready');
+          showGlobalToast('已自動同步最新紀錄至雲端！', 'success');
+        } catch (err) {
+          console.warn("作業同步暫存於本機:", err);
+          this.updateSyncUI('error');
+          showGlobalToast('雲端同步超時，紀錄已安全暫存本機', 'info');
+        } finally {
+          this.isSyncing = false;
+          if (this.hasPendingSync) {
+            this.hasPendingSync = false;
+            this.scheduleCloudSync();
+          }
+        }
+      },
+
+      // 🌟 主動手動拉取最新資料按鈕
+      async pullAllFromCloud() {
+        this.updateSyncUI('syncing');
+        try {
+          const res = await fetch(`${HOMEWORK_GAS_URL}?action=getData`);
+          const json = await res.json();
+          if (json.status === 'success' && json.data) {
+            const d = json.data;
+            if (d.classes && d.classes.length > 0) this.data.classes = d.classes;
+            if (d.subjects) this.data.subjects = d.subjects;
+            if (d.students) this.data.students = d.students;
+            if (d.records) this.data.records = d.records;
+            if (d.statsOverrides) this.data.statsOverrides = d.statsOverrides;
+            
+            this.saveLocal();
+            this.renderClassSelect();
+            this.render();
+            this.updateSyncUI('ready');
+            showGlobalToast('已下載雲端最新出缺勤與作業資料！', 'success');
+          }
+        } catch (e) {
+          console.error("同步失敗:", e);
+          this.updateSyncUI('error');
+          showGlobalToast('無法取得雲端資料，目前維持本機紀錄', 'error');
+        }
       },
 
       toggleAuth() {
@@ -897,7 +1014,6 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
             this.updateAuthUI();
             showGlobalToast("已登出，目前為檢視模式", "info");
             this.render();
-            // 同時重新整理教室狀況回報的管理後台預覽，以即時隱藏刪除按鈕
             renderSchoolRecords();
           }
         } else {
@@ -907,7 +1023,6 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
             this.updateAuthUI();
             showGlobalToast("✅ 教師身分驗證成功，已解鎖編輯權限！");
             this.render();
-            // 同時重新整理教室狀況回報的管理後台預覽，以即時顯示刪除按鈕
             renderSchoolRecords();
           } else if (pwd !== null) {
             showGlobalToast("❌ 密碼錯誤！", "error");
@@ -976,9 +1091,10 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
           if(idx !== -1) this.data.classes[idx] = n.trim();
           this.data.students.forEach(s => { if(s.class === old) s.class = n.trim(); });
           this.data.currentClass = n.trim();
-          this.save();
+          this.saveLocal();
           this.renderClassSelect();
           this.render();
+          this.scheduleCloudSync();
         }
       },
 
@@ -989,8 +1105,9 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
           const newSubs = input.split(/[,，]/).map(s=>s.trim()).filter(s=>s!=="");
           if (newSubs.length === 3) {
             this.data.subjects = newSubs;
-            this.save();
+            this.saveLocal();
             this.renderEntryTable();
+            this.scheduleCloudSync();
           } else {
             alert("請務必輸入「3個」科目！");
           }
@@ -1039,10 +1156,11 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
         newClassesArray.unshift(initialFirstClass);
         this.data.classes = newClassesArray.slice(0, 6);
 
-        this.save();
+        this.saveLocal();
         this.data.currentClass = this.data.classes[0];
         this.renderClassSelect();
         this.render();
+        this.scheduleCloudSync();
         alert("🚀 新學年縱向升級大成功！");
       },
 
@@ -1069,8 +1187,10 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
         const diff = d.getDate() - day + (day === 0 ? -6 : 1);
         this.data.currentDate = new Date(d.setDate(diff));
         const s = this.data.currentDate.toISOString().split('T')[0];
-        document.getElementById('datePicker').value = s;
-        document.getElementById('attDatePicker').value = s;
+        const dp = document.getElementById('datePicker');
+        const adp = document.getElementById('attDatePicker');
+        if (dp) dp.value = s;
+        if (adp) adp.value = s;
       },
 
       changeDate() {
@@ -1098,40 +1218,19 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
         this.render();
       },
 
-      async save(specificKey = null, specificVal = null) {
-        const payload = {
+      saveLocal() {
+        localStorage.setItem('homework_data', JSON.stringify({
           classes: this.data.classes,
           subjects: this.data.subjects,
           students: this.data.students,
           records: this.data.records,
           statsOverrides: this.data.statsOverrides
-        };
+        }));
+      },
 
-        localStorage.setItem('homework_data', JSON.stringify(payload));
-
-        if (specificKey !== null) {
-          try {
-            await fetch(HOMEWORK_GAS_URL, {
-              method: 'POST',
-              mode: 'no-cors',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'updateRecord', key: specificKey, value: specificVal })
-            });
-          } catch (err) {
-            console.warn("增量同步失敗", err);
-          }
-        } else {
-          try {
-            await fetch(HOMEWORK_GAS_URL, {
-              method: 'POST',
-              mode: 'no-cors',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'syncAll', data: payload })
-            });
-          } catch (err) {
-            console.warn("全量同步失敗", err);
-          }
-        }
+      save() {
+        this.saveLocal();
+        this.scheduleCloudSync();
       },
 
       getWeekDays() {
@@ -1161,8 +1260,9 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
         if(n) this.data.records[k] = n;
         else delete this.data.records[k];
         
-        this.save();
+        this.saveLocal();
         this.renderEntryTable();
+        this.scheduleCloudSync();
       },
 
       toggleAttendance(sid, d, p) {
@@ -1183,8 +1283,9 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
         if(n) this.data.records[k] = n;
         else delete this.data.records[k];
 
-        this.save();
+        this.saveLocal();
         this.renderAttendanceTable();
+        this.scheduleCloudSync();
       },
 
       formatDateROC(dateStr) {
@@ -1336,12 +1437,11 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
         const st = this.data.students.filter(s => s.class === this.data.currentClass);
         const d1 = document.getElementById('statStartDate').value;
         const d2 = document.getElementById('statEndDate').value;
-        const rangeKey = `${d1}_${d2}`; // 🌟 建立當前區間標記
+        const rangeKey = `${d1}_${d2}`;
         
         return st.map(s => {
           let hX=0, hT=0, aT=0, aS=0, aL=0, aO=0;
           
-          // 1. 根據日期範圍從每日日誌中精確計算
           Object.keys(this.data.records).forEach(k => {
             if(k.startsWith(s.id + '_')) {
               const pts = k.split('_'); const d = pts[1]; const t = pts[2];
@@ -1360,7 +1460,6 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
             }
           });
           
-          // 2. 🌟 判斷當前區間是否有手動修訂（相容新舊結構）
           const ov = (this.data.statsOverrides && this.data.statsOverrides[`${s.id}_${rangeKey}`]) || null;
           let isOverridden = false;
           if (ov) {
@@ -1459,7 +1558,6 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
           const elAO = document.getElementById(`stat_${s.id}_aO`);
 
           if (elHX && elHT && elAT && elAS && elAL && elAO) {
-            // 🌟 將修訂與該日期範圍綁定
             this.data.statsOverrides[`${s.id}_${rangeKey}`] = {
               hX: parseInt(elHX.value) || 0,
               hT: parseInt(elHT.value) || 0,
@@ -1471,8 +1569,9 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
           }
         });
 
-        this.save();
+        this.saveLocal();
         this.renderStats();
+        this.scheduleCloudSync();
         showGlobalToast(`✅ 已儲存【${d1} 至 ${d2}】區間的統計修訂！`);
       },
 
@@ -1488,11 +1587,12 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
         st.forEach(s => { 
           if (this.data.statsOverrides) {
             delete this.data.statsOverrides[`${s.id}_${rangeKey}`];
-            delete this.data.statsOverrides[s.id]; // 同步清除舊格式覆寫
+            delete this.data.statsOverrides[s.id];
           }
         });
-        this.save();
+        this.saveLocal();
         this.renderStats();
+        this.scheduleCloudSync();
         showGlobalToast("已重置為系統即時計算數據！", "info");
       },
 
@@ -1647,11 +1747,12 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
         if(this.data.students.some(x => x.class === this.data.currentClass && x.seat === s)) return alert("座號重複");
         this.data.students.push({ id: Date.now().toString(), class: this.data.currentClass, seat: s, name: n });
         this.data.students.sort((a,b) => a.seat - b.seat);
-        this.save();
+        this.saveLocal();
         document.getElementById('newSeat').value = '';
         document.getElementById('newName').value = '';
         document.getElementById('newSeat').focus();
         this.renderStudents();
+        this.scheduleCloudSync();
       },
 
       fillClass(cnt) {
@@ -1664,23 +1765,29 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
           }
         }
         this.data.students.sort((a,b) => a.seat - b.seat);
-        this.save();
+        this.saveLocal();
         this.renderStudents();
+        this.scheduleCloudSync();
       },
 
       updateStudentName(id, v) {
         if (!this.data.isLoggedIn) return;
         const s = this.data.students.find(x => x.id === id);
-        if(s){ s.name = v.trim(); this.save(); }
+        if(s){ 
+          s.name = v.trim(); 
+          this.saveLocal(); 
+          this.scheduleCloudSync();
+        }
       },
 
       deleteStudent(id) {
         if (!this.data.isLoggedIn) return alert("❌ 權限不足");
-        if(confirm("刪除？")){
+        if(confirm("確定刪除此學生？")){
           this.data.students = this.data.students.filter(s => s.id !== id);
           Object.keys(this.data.records).forEach(k => { if(k.startsWith(id + '_')) delete this.data.records[k]; });
-          this.save();
+          this.saveLocal();
           this.renderStudents();
+          this.scheduleCloudSync();
         }
       },
 
@@ -1706,9 +1813,10 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
           if(val) this.data.records[k] = val;
           else delete this.data.records[k];
         });
-        this.save();
+        this.saveLocal();
         this.renderAttendanceTable();
         this.closeModal();
+        this.scheduleCloudSync();
       },
 
       exportExcel() {
@@ -1765,11 +1873,12 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
               if (this.data.classes.length > 0) {
                 this.data.currentClass = this.data.classes[0];
               }
-              this.save();
+              this.saveLocal();
               this.renderClassSelect();
               this.render();
+              this.scheduleCloudSync();
               el.value = "";
-              alert("資料匯入成功！");
+              alert("資料匯入成功，並已啟動背景同步至雲端！");
             }
           } catch(err) {
             console.error("Import Error:", err);
@@ -2031,7 +2140,6 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
         return;
       }
 
-      // 🌟 核心修改：判斷教師是否已登入，若已登入才渲染刪除按鈕
       const isLoggedIn = app.data && app.data.isLoggedIn;
 
       c.innerHTML = list.map(rec => {
@@ -2050,7 +2158,6 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
           `;
         }).join('');
 
-        // 🌟 如果 isLoggedIn 為 true，則顯示刪除按鈕；否則留空
         const deleteBtnHtml = isLoggedIn 
           ? `<button onclick="deleteSchoolRecord('${rec.id}', '${rec.folderId || ''}')" title="同步刪除 Drive 與 Sheet 檔案" class="text-gray-400 hover:text-rose-500 p-1 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>` 
           : `<span class="text-xs text-gray-300 select-none" title="需教師登入才可刪除"><i class="fa-solid fa-lock text-[10px]"></i> 唯讀</span>`;
@@ -2076,7 +2183,6 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
     }
 
     async function deleteSchoolRecord(id, folderId) {
-      // 🌟 雙重防護：執行刪除前再次檢查登入狀態
       if (!app.data || !app.data.isLoggedIn) {
         showGlobalToast("❌ 權限不足：請先點擊右上角「教師登入」才能刪除通報紀錄！", "error");
         return;
@@ -2417,7 +2523,7 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
               <button onclick="setPickupRole('安親老師端')" class="p-5 rounded-2xl border-2 border-gray-100 hover:border-indigo-500 hover:bg-indigo-50/40 flex flex-col items-center gap-2 font-bold text-gray-700 transition">
                 <i class="fa-solid fa-chalkboard-user text-2xl text-indigo-600"></i> 安親老師端
               </button>
-              <button onclick="setPickupRole('辦公室端')" class="p-5 rounded-2xl border-2 border-gray-100 hover:border-purple-500 hover:bg-purple-50/40 flex flex-col items-center gap-2 font-bold text-gray-700 transition">
+              <button onclick="setPickupRole('辦公室端')" class="p-5 rounded-2xl border-2 border-purple-500 hover:bg-purple-50/40 flex flex-col items-center gap-2 font-bold text-gray-700 transition">
                 <i class="fa-solid fa-briefcase text-2xl text-purple-600"></i> 辦公室端
               </button>
               <button onclick="setPickupRole('警衛室端')" class="p-5 rounded-2xl border-2 border-gray-100 hover:border-amber-500 hover:bg-amber-50/40 flex flex-col items-center gap-2 font-bold text-gray-700 transition col-span-2">
@@ -2543,8 +2649,10 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
     // ---------------------------------------------------------
     window.onload = function() {
       try {
+        // 先啟動出缺勤模組（立即載入本機快取）
         app.init();
 
+        // 載入教室狀況快取
         const savedSchool = localStorage.getItem('school_reports_data');
         if (savedSchool) {
           try { schoolReportsList = JSON.parse(savedSchool); } catch(e) { schoolReportsList = []; }
@@ -2552,10 +2660,12 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
         updateSchoolStats();
         setupSchoolDropzone();
 
-        fetchPickupData();
+        // 預設進入「課後晚接」分頁並載入資料
         switchPortal('pickup');
+        fetchPickupData();
       } catch (e) {
         console.error("Window onload init error:", e);
+        switchPortal('pickup');
       }
     };
   </script>
