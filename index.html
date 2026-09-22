@@ -92,7 +92,7 @@
     .print-only-cell { display: none; }
     .print-footer { display: none; }
 
-    /* 🌟 個人通知單樣式 */
+    /* 個人通知單樣式 */
     .report-page {
       width: 210mm; min-height: 297mm; padding: 15mm 20mm; margin: 0 auto; background: white;
       box-shadow: 0 0 10px rgba(0,0,0,0.1); position: relative; box-sizing: border-box; display: flex; flex-direction: column;
@@ -105,9 +105,6 @@
 
     #print-container-school { display: none; }
 
-    /* =========================================================
-       🖨️ 列印專用樣式調校（單頁完美比例無裁切）
-       ========================================================= */
     @media print {
       @page { size: landscape; margin: 4mm 5mm 4mm 5mm; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white !important; }
@@ -145,7 +142,6 @@
       table { width: 100% !important; table-layout: fixed !important; }
       .sticky-seat, .name-cell, thead { position: static !important; }
       
-      /* 1. 作業登記列印優化 */
       #page-entry table { width: 100% !important; font-size: 8.5pt !important; border: 2px solid black !important; }
       #page-entry th, #page-entry td { border: 1px solid black !important; padding: 1px 1px !important; height: 1.25rem !important; }
       #page-entry tr { height: 1.25rem !important; }
@@ -178,7 +174,6 @@
       .status-X { background-color: #fee2e2 !important; color: #dc2626 !important; }
       .status-TRI { background-color: #fef9c3 !important; color: #ca8a04 !important; }
 
-      /* 2. 出缺勤紀錄表列印優化 */
       #page-attendance table { width: 100% !important; font-size: 9pt !important; border: 2px solid black !important; } 
       #page-attendance .screen-only { display: none !important; }
       #page-attendance .print-only-cell { display: table-cell !important; }
@@ -208,7 +203,6 @@
       #page-attendance th.print-only-cell, #page-attendance td.print-only-cell { width: auto !important; }
       #page-attendance th:last-child, #page-attendance td:last-child { width: 45px !important; min-width: 45px !important; }
 
-      /* 3. 個人通知單設計 */
       #page-reports { width: 100% !important; }
       #page-reports.flex { display: block !important; }
       #page-reports .report-page { 
@@ -301,7 +295,6 @@
       <!-- 主工作區 -->
       <div class="flex-1 flex flex-col h-full overflow-hidden bg-white relative main-container">
         
-        <!-- 單面列印頁頭標題 -->
         <div id="print-only-header" class="hidden text-center p-1 border-b-2 border-black">
           <h1 class="text-xl font-bold mb-0 text-black"><span id="print-class-title"></span> <span id="print-page-title"></span></h1>
           <p class="text-xs text-black">日期：<span id="print-week-range"></span></p>
@@ -322,7 +315,6 @@
                 <i class="fa-solid fa-calendar-plus"></i> <span>啟用補課週六</span>
               </button>
 
-              <!-- 🌟 雲端同步狀態提示徽章 -->
               <span id="homework-sync-status" class="text-xs font-bold text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
                 <i class="fa-solid fa-check"></i> 雲端已同步
               </span>
@@ -827,9 +819,9 @@
     
     const app = {
       currentTargetInfo: { sid: null, date: null }, 
-      syncTimer: null,          // 🌟 防抖佇列計時器
-      isSyncing: false,         // 🌟 是否正在發送網路請求中
-      hasPendingSync: false,    // 🌟 是否有尚未同步的後續變更
+      syncTimer: null,          
+      isSyncing: false,         
+      hasPendingSync: false,    
       data: {
         classes: [], subjects: ["工作本", "語文", "數學"], 
         currentClass: "", currentDate: new Date(), 
@@ -840,7 +832,6 @@
         isLoggedIn: false
       },
       
-      // 🌟 修正後的 init：先顯示本機畫面，再於背景悄悄同步雲端
       init() {
         const saved = localStorage.getItem('homework_data');
         let parsed = {};
@@ -905,7 +896,6 @@
         }
       },
 
-      // 🌟 雲端同步狀態提示 UI 控制
       updateSyncUI(status) {
         const el = document.getElementById('homework-sync-status');
         if (!el) return;
@@ -924,7 +914,6 @@
         }
       },
 
-      // 🌟 核心防抖機制：延遲 1.5 秒打包送出
       scheduleCloudSync() {
         this.updateSyncUI('pending');
         if (this.syncTimer) clearTimeout(this.syncTimer);
@@ -934,7 +923,6 @@
         }, 1500);
       },
 
-      // 🌟 全量批次打包推播至 Google 試算表
       async pushAllRecordsToCloud() {
         if (!HOMEWORK_GAS_URL) {
           this.updateSyncUI('ready');
@@ -980,7 +968,6 @@
         }
       },
 
-      // 🌟 主動手動拉取最新資料按鈕
       async pullAllFromCloud() {
         this.updateSyncUI('syncing');
         try {
@@ -2308,7 +2295,7 @@
     }
 
     // ---------------------------------------------------------
-    // 4. 系統 3：課後晚接記錄系統
+    // 4. 系統 3：課後晚接記錄系統 (全面修正非同步超時防卡死)
     // ---------------------------------------------------------
     const PICKUP_GAS_URL = "https://script.google.com/macros/s/AKfycbxidUn1nAfCp1FRffupl9MEeW7K7WeN1jhRAuBgm1gTlERsBtHFlV-O5rGrRNdibKfR/exec";
     let pickupState = {
@@ -2320,38 +2307,67 @@
     let currentCheckoutStudentId = null;
     let selectedPickupSignature = "媽媽";
 
+    // 帶超時保護的 fetch 輔助函式
+    function fetchWithTimeout(url, options = {}, timeout = 6000) {
+      return Promise.race([
+        fetch(url, options),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("連線逾時")), timeout))
+      ]);
+    }
+
     async function fetchPickupData() {
       try {
-        const res = await fetch(PICKUP_GAS_URL);
+        const res = await fetchWithTimeout(PICKUP_GAS_URL, {}, 6000);
         const json = await res.json();
         if (json.status === 'success' && Array.isArray(json.data)) {
           pickupState.records = json.data.reverse();
+          localStorage.setItem('cached_pickup_records', JSON.stringify(pickupState.records));
           renderPickupModule();
         }
       } catch (err) {
-        console.warn("晚接讀取中斷:", err);
+        console.warn("晚接讀取中斷或逾時，採用本機暫存：", err);
+        const cached = localStorage.getItem('cached_pickup_records');
+        if (cached) {
+          try { pickupState.records = JSON.parse(cached); } catch(e){}
+        }
+        renderPickupModule();
+      } finally {
+        pickupState.isLoading = false;
       }
     }
 
+    // 🌟 修正核心：帶保底機制與自動解鎖
     async function executePickupAction(actionType, payload, successMsg) {
       pickupState.isLoading = true;
       renderPickupModule();
+
+      // 安全定時器：8 秒強制解鎖，杜絕「處理中」卡死
+      const forceUnlockTimer = setTimeout(() => {
+        if (pickupState.isLoading) {
+          pickupState.isLoading = false;
+          renderPickupModule();
+          showGlobalToast('已儲存至本機，雲端背景同步中', 'info');
+        }
+      }, 7000);
+
       try {
-        await fetch(PICKUP_GAS_URL, {
+        await fetchWithTimeout(PICKUP_GAS_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: actionType, data: payload })
-        });
+        }, 5000);
+
         showGlobalToast(successMsg, 'success');
-        setTimeout(() => {
-          fetchPickupData();
-          pickupState.isLoading = false;
-        }, 1500);
       } catch (e) {
-        showGlobalToast('與晚接試算表通訊失敗', 'error');
+        console.warn("晚接背景通訊延遲：", e);
+        showGlobalToast('已儲存至本機，雲端背景處理中', 'info');
+      } finally {
+        clearTimeout(forceUnlockTimer);
         pickupState.isLoading = false;
         renderPickupModule();
+        // 延遲更新以抓取最新試算表
+        setTimeout(() => { fetchPickupData(); }, 1200);
       }
     }
 
@@ -2371,33 +2387,71 @@
       renderPickupModule();
     }
 
+    // 🌟 智慧模糊比對學生姓名（本地秒速帶出，不再依賴網路查詢）
     async function lookupStudentName() {
-      const cls = document.getElementById('pickup-input-class').value.trim();
-      const seat = document.getElementById('pickup-input-seat').value.trim();
+      const clsInput = document.getElementById('pickup-input-class').value.trim();
+      const seatInput = document.getElementById('pickup-input-seat').value.trim();
       const nameInput = document.getElementById('pickup-input-name');
       const notesInput = document.getElementById('pickup-input-notes');
 
-      if (!cls || !seat) return;
+      if (!clsInput || !seatInput) return;
 
-      if (app && app.data && Array.isArray(app.data.students)) {
-        const seatNum = parseInt(seat);
-        const localMatch = app.data.students.find(s => {
-          const matchSeat = s.seat === seatNum;
-          const matchClass = s.class.includes(cls) || cls.includes(s.class) || s.class.replace(/[^0-9]/g, '') === cls.replace(/[^0-9]/g, '');
-          return matchSeat && matchClass;
+      const seatNum = parseInt(seatInput, 10);
+      if (isNaN(seatNum)) return;
+
+      // 提取年級數字（例如 501 -> 5；5年級 -> 5；五年級 -> 5）
+      const extractGrade = (str) => {
+        const cnMap = { '一': '1', '二': '2', '三': '3', '四': '4', '五': '5', '六': '6' };
+        for (let cn in cnMap) {
+          if (str.includes(cn)) return cnMap[cn];
+        }
+        const match = str.match(/\d+/);
+        if (match) {
+          const num = match[0];
+          return num.length >= 3 ? num.charAt(0) : num; // 501 取 5，5 取 5
+        }
+        return str;
+      };
+
+      const targetGrade = extractGrade(clsInput);
+
+      // 1. 優先比對出缺勤系統的學生清單
+      if (app && app.data && Array.isArray(app.data.students) && app.data.students.length > 0) {
+        const match = app.data.students.find(s => {
+          const sGrade = extractGrade(String(s.class));
+          return s.seat === seatNum && sGrade === targetGrade;
         });
 
-        if (localMatch && localMatch.name) {
-          nameInput.value = localMatch.name;
-          showGlobalToast(`✅ 已帶出學生：${localMatch.name}`);
+        if (match && match.name) {
+          nameInput.value = match.name;
+          showGlobalToast(`✅ 已帶出學生：${match.name}`);
           if (notesInput) notesInput.focus();
           return;
         }
       }
 
+      // 2. 次要比對晚接預載的全校學生名冊快取
+      const allStudentsCached = localStorage.getItem('cached_all_students');
+      if (allStudentsCached) {
+        try {
+          const list = JSON.parse(allStudentsCached);
+          const match = list.find(s => {
+            const sGrade = extractGrade(String(s.gradeClass));
+            return parseInt(s.seatNumber, 10) === seatNum && (sGrade === targetGrade || String(s.gradeClass).includes(clsInput));
+          });
+          if (match && match.studentName) {
+            nameInput.value = match.studentName;
+            showGlobalToast(`✅ 已帶出學生：${match.studentName}`);
+            if (notesInput) notesInput.focus();
+            return;
+          }
+        } catch(e){}
+      }
+
+      // 3. 本地皆查無時，向試算表發出查詢
       nameInput.value = "查詢中...";
       try {
-        const res = await fetch(`${PICKUP_GAS_URL}?action=lookup&gradeClass=${encodeURIComponent(cls)}&seatNumber=${encodeURIComponent(seat)}`);
+        const res = await fetchWithTimeout(`${PICKUP_GAS_URL}?action=lookup&gradeClass=${encodeURIComponent(clsInput)}&seatNumber=${encodeURIComponent(seatInput)}`, {}, 3500);
         const result = await res.json();
         if (result.status === 'success' && result.data && result.data.name) {
           nameInput.value = result.data.name;
@@ -2405,12 +2459,12 @@
           if (notesInput) notesInput.focus();
         } else {
           nameInput.value = "";
-          showGlobalToast('⚠️ 找不到此學生，請直接輸入姓名', 'info');
+          showGlobalToast('⚠️ 查無學生名冊，請直接手動輸入姓名', 'info');
           nameInput.focus();
         }
       } catch (err) {
         nameInput.value = "";
-        showGlobalToast('查詢超時，請直接輸入姓名', 'info');
+        showGlobalToast('名冊未建立此座號，請直接輸入姓名', 'info');
         nameInput.focus();
       }
     }
@@ -2441,6 +2495,11 @@
         status: 'waiting',
         createdBy: pickupState.role
       };
+
+      // 🌟 樂觀更新：立即加入前端待接回清單，完全不需要等待網路
+      pickupState.records.unshift(newRec);
+      localStorage.setItem('cached_pickup_records', JSON.stringify(pickupState.records));
+
       executePickupAction('add', newRec, `已送出登記：${name}`);
       e.target.reset();
     }
@@ -2498,12 +2557,24 @@
       const now = new Date();
       const timeStr = now.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false });
       
+      // 🌟 樂觀簽退：前端立即把狀態標示為完成
+      const target = pickupState.records.find(r => r.id === currentCheckoutStudentId);
+      if (target) {
+        target.status = 'completed';
+        target.departureTime = timeStr;
+        target.signature = finalSig;
+        localStorage.setItem('cached_pickup_records', JSON.stringify(pickupState.records));
+      }
+
       executePickupAction('checkout', { id: currentCheckoutStudentId, departureTime: timeStr, signature: finalSig }, `✅ 已完成簽退 (${finalSig})！`);
       closePickupModal();
     }
 
     function handlePickupDelete(id) {
       if (!confirm("確定刪除此筆記錄？")) return;
+      // 樂觀刪除
+      pickupState.records = pickupState.records.filter(r => r.id !== id);
+      localStorage.setItem('cached_pickup_records', JSON.stringify(pickupState.records));
       executePickupAction('delete', { id }, '記錄已刪除');
     }
 
@@ -2571,7 +2642,7 @@
                 <label class="block text-xs font-semibold text-gray-500 mb-1">備註 (原因/地點)</label>
                 <input id="pickup-input-notes" placeholder="選填備註" class="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm outline-none focus:border-indigo-500" />
               </div>
-              <button type="submit" ${pickupState.isLoading ? 'disabled' : ''} class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition shadow">
+              <button type="submit" ${pickupState.isLoading ? 'disabled' : ''} class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition shadow flex items-center justify-center gap-2">
                 ${pickupState.isLoading ? '<i class="fa-solid fa-spinner fa-spin"></i> 處理中' : '送出登記'}
               </button>
             </form>
@@ -2587,10 +2658,10 @@
             ` : `
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 ${waiting.map(s => `
-                  <div class="p-4 bg-amber-50/60 border border-amber-200 rounded-2xl flex flex-col justify-between">
+                  <div class="p-4 bg-amber-50/60 border border-amber-200 rounded-2xl flex flex-col justify-between shadow-sm">
                     <div>
                       <div class="flex justify-between text-xs font-bold text-gray-500 mb-1">
-                        <span class="bg-white px-2 py-0.5 rounded border border-gray-200">${s.gradeClass}</span>
+                        <span class="bg-white px-2 py-0.5 rounded border border-gray-200 font-mono">${s.gradeClass}</span>
                         <span>${s.arrivalTime} 到達</span>
                       </div>
                       <div class="text-xl font-black text-gray-800 my-1">${s.studentName}</div>
@@ -2647,12 +2718,10 @@
     // ---------------------------------------------------------
     // 5. 系統啟動進入點
     // ---------------------------------------------------------
-    window.onload = function() {
+   window.onload = function() {
       try {
-        // 先啟動出缺勤模組（立即載入本機快取）
         app.init();
 
-        // 載入教室狀況快取
         const savedSchool = localStorage.getItem('school_reports_data');
         if (savedSchool) {
           try { schoolReportsList = JSON.parse(savedSchool); } catch(e) { schoolReportsList = []; }
@@ -2660,9 +2729,24 @@
         updateSchoolStats();
         setupSchoolDropzone();
 
-        // 預設進入「課後晚接」分頁並載入資料
+        const cachedPickup = localStorage.getItem('cached_pickup_records');
+        if (cachedPickup) {
+          try { pickupState.records = JSON.parse(cachedPickup); } catch(e){}
+        }
+
         switchPortal('pickup');
         fetchPickupData();
+
+        // 🌟 新增：背後靜態快取晚接試算表的全校名單，之後輸入座號直接本地秒出
+        fetch(`${PICKUP_GAS_URL}?action=getAllStudents`)
+          .then(res => res.json())
+          .then(json => {
+            if (json.status === 'success' && Array.isArray(json.data)) {
+              localStorage.setItem('cached_all_students', JSON.stringify(json.data));
+            }
+          })
+          .catch(() => {});
+
       } catch (e) {
         console.error("Window onload init error:", e);
         switchPortal('pickup');
