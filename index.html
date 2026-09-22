@@ -843,6 +843,7 @@
             this.data.subjects = json.data.subjects || ["工作本", "語文", "數學"];
             this.data.students = json.data.students || [];
             this.data.records = json.data.records || {};
+this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行接收雲端覆寫資料
             
             localStorage.setItem('homework_data', JSON.stringify({
               classes: this.data.classes,
@@ -1421,20 +1422,44 @@
       },
 
       saveStats() {
-        if (!this.data.isLoggedIn) return alert("❌ 權限不足：請先點擊右上角「教師登入」才能儲存修訂！");
-        const st = this.data.students;
-        st.forEach(s => {
-          const hX = parseInt(document.getElementById(`stat_${s.id}_hX`).value) || 0;
-          const hT = parseInt(document.getElementById(`stat_${s.id}_hT`).value) || 0;
-          const aT = parseInt(document.getElementById(`stat_${s.id}_aT`).value) || 0;
-          const aS = parseInt(document.getElementById(`stat_${s.id}_aS`).value) || 0;
-          const aL = parseInt(document.getElementById(`stat_${s.id}_aL`).value) || 0;
-          const aO = parseInt(document.getElementById(`stat_${s.id}_aO`).value) || 0;
-          this.data.statsOverrides[s.id] = { hX, hT, aT, aS, aL, aO };
+        if (!this.data.isLoggedIn) {
+          alert("❌ 權限不足：請先點擊右上角「教師登入」並輸入密碼才能儲存修訂！");
+          return;
+        }
+
+        // 🌟 修正 1：只讀取目前班級中畫面上存在的學生輸入框
+        const currentClassStudents = this.data.students.filter(s => s.class === this.data.currentClass);
+        
+        if (currentClassStudents.length === 0) {
+          showGlobalToast("目前班級無學生資料", "info");
+          return;
+        }
+
+        currentClassStudents.forEach(s => {
+          const elHX = document.getElementById(`stat_${s.id}_hX`);
+          const elHT = document.getElementById(`stat_${s.id}_hT`);
+          const elAT = document.getElementById(`stat_${s.id}_aT`);
+          const elAS = document.getElementById(`stat_${s.id}_aS`);
+          const elAL = document.getElementById(`stat_${s.id}_aL`);
+          const elAO = document.getElementById(`stat_${s.id}_aO`);
+
+          // 🌟 修正 2：安全取值，避免 null 導致程式中斷
+          if (elHX && elHT && elAT && elAS && elAL && elAO) {
+            this.data.statsOverrides[s.id] = {
+              hX: parseInt(elHX.value) || 0,
+              hT: parseInt(elHT.value) || 0,
+              aT: parseInt(elAT.value) || 0,
+              aS: parseInt(elAS.value) || 0,
+              aL: parseInt(elAL.value) || 0,
+              aO: parseInt(elAO.value) || 0
+            };
+          }
         });
+
+        // 儲存至本地快取並同步至雲端 GAS
         this.save();
         this.renderStats();
-        alert("統計數據已手動修訂並儲存！");
+        showGlobalToast("✅ 統計數據修訂完成，已儲存並同步至雲端！");
       },
 
       resetStats() {
