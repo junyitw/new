@@ -1336,21 +1336,32 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
         const st = this.data.students.filter(s => s.class === this.data.currentClass);
         const d1 = document.getElementById('statStartDate').value;
         const d2 = document.getElementById('statEndDate').value;
+        const rangeKey = `${d1}_${d2}`; // 🌟 建立當前區間標記
         
         return st.map(s => {
           let hX=0, hT=0, aT=0, aS=0, aL=0, aO=0;
+          
+          // 1. 根據日期範圍從每日日誌中精確計算
           Object.keys(this.data.records).forEach(k => {
             if(k.startsWith(s.id + '_')) {
               const pts = k.split('_'); const d = pts[1]; const t = pts[2];
               if((!d1 || d >= d1) && (!d2 || d <= d2)) {
                 const v = this.data.records[k];
-                if(t === 'ATT'){ if(v==='△')aT++; if(v==='□')aS++; if(v==='○')aL++; if(v==='☆')aO++; }
-                else { if(v==='X')hX++; if(v==='△')hT++; }
+                if(t === 'ATT'){ 
+                  if(v==='△') aT++; 
+                  if(v==='□') aS++; 
+                  if(v==='○') aL++; 
+                  if(v==='☆') aO++; 
+                } else { 
+                  if(v==='X') hX++; 
+                  if(v==='△') hT++; 
+                }
               }
             }
           });
           
-          const ov = this.data.statsOverrides[s.id];
+          // 2. 🌟 判斷當前區間是否有手動修訂（相容新舊結構）
+          const ov = (this.data.statsOverrides && this.data.statsOverrides[`${s.id}_${rangeKey}`]) || null;
           let isOverridden = false;
           if (ov) {
             if (ov.hX !== undefined) { hX = ov.hX; isOverridden = true; }
@@ -1427,13 +1438,17 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
           return;
         }
 
-        // 🌟 修正 1：只讀取目前班級中畫面上存在的學生輸入框
+        const d1 = document.getElementById('statStartDate').value;
+        const d2 = document.getElementById('statEndDate').value;
+        const rangeKey = `${d1}_${d2}`;
+
         const currentClassStudents = this.data.students.filter(s => s.class === this.data.currentClass);
-        
         if (currentClassStudents.length === 0) {
           showGlobalToast("目前班級無學生資料", "info");
           return;
         }
+
+        if (!this.data.statsOverrides) this.data.statsOverrides = {};
 
         currentClassStudents.forEach(s => {
           const elHX = document.getElementById(`stat_${s.id}_hX`);
@@ -1443,9 +1458,9 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
           const elAL = document.getElementById(`stat_${s.id}_aL`);
           const elAO = document.getElementById(`stat_${s.id}_aO`);
 
-          // 🌟 修正 2：安全取值，避免 null 導致程式中斷
           if (elHX && elHT && elAT && elAS && elAL && elAO) {
-            this.data.statsOverrides[s.id] = {
+            // 🌟 將修訂與該日期範圍綁定
+            this.data.statsOverrides[`${s.id}_${rangeKey}`] = {
               hX: parseInt(elHX.value) || 0,
               hT: parseInt(elHT.value) || 0,
               aT: parseInt(elAT.value) || 0,
@@ -1456,19 +1471,29 @@ this.data.statsOverrides = json.data.statsOverrides || {}; // 🌟 新增這行�
           }
         });
 
-        // 儲存至本地快取並同步至雲端 GAS
         this.save();
         this.renderStats();
-        showGlobalToast("✅ 統計數據修訂完成，已儲存並同步至雲端！");
+        showGlobalToast(`✅ 已儲存【${d1} 至 ${d2}】區間的統計修訂！`);
       },
 
       resetStats() {
         if (!this.data.isLoggedIn) return alert("❌ 權限不足：請先點擊右上角「教師登入」才能重置數據！");
-        if(!confirm("確定要清除所有手動修改的數據，恢復成系統自動計算嗎？")) return;
+        const d1 = document.getElementById('statStartDate').value;
+        const d2 = document.getElementById('statEndDate').value;
+        const rangeKey = `${d1}_${d2}`;
+
+        if(!confirm(`確定要清除【${d1} 至 ${d2}】的手動修改數據，恢復成系統自動計算嗎？`)) return;
+        
         const st = this.data.students;
-        st.forEach(s => { delete this.data.statsOverrides[s.id]; });
+        st.forEach(s => { 
+          if (this.data.statsOverrides) {
+            delete this.data.statsOverrides[`${s.id}_${rangeKey}`];
+            delete this.data.statsOverrides[s.id]; // 同步清除舊格式覆寫
+          }
+        });
         this.save();
         this.renderStats();
+        showGlobalToast("已重置為系統即時計算數據！", "info");
       },
 
       showStatDetails(sid, name, type) {
