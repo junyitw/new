@@ -2603,6 +2603,26 @@
       executePickupAction('delete', { id }, '記錄已刪除');
     }
 
+    // 🌟 手動觸發晚接資料同步函式
+    async function handleManualPickupSync(btnEl) {
+      if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>同步中...</span>`;
+      }
+      
+      try {
+        await fetchPickupData();
+        showGlobalToast("✅ 晚接紀錄已與雲端同步完成！", "success");
+      } catch (e) {
+        showGlobalToast("⚠️ 同步連線逾時，已保留本機快取", "info");
+      } finally {
+        if (btnEl) {
+          btnEl.disabled = false;
+          btnEl.innerHTML = `<i class="fa-solid fa-rotate"></i><span>同步雲端</span>`;
+        }
+      }
+    }
+
     function renderPickupModule() {
       const root = document.getElementById('pickup-app-container');
       if (!root) return;
@@ -2636,10 +2656,16 @@
 
       root.innerHTML = `
         <div class="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
-          <div class="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-sm">
-            <div class="flex items-center gap-3">
+          <div class="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex-wrap gap-3">
+            <div class="flex items-center gap-3 flex-wrap">
               <span class="px-3.5 py-1.5 rounded-xl bg-indigo-100 text-indigo-700 font-black text-sm">${pickupState.role}</span>
               <span class="text-xs text-gray-400 font-medium">線上同步運作中</span>
+              
+              <!-- 🌟 每個登入身分均可見的同步雲端按鈕 -->
+              <button onclick="handleManualPickupSync(this)" class="px-3.5 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition flex items-center gap-1.5 active:scale-95 shadow-sm">
+                <i class="fa-solid fa-rotate"></i>
+                <span>同步雲端</span>
+              </button>
             </div>
             <button onclick="setPickupRole(null)" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-xs font-bold transition">
               切換身分
