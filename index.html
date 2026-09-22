@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>均一國小部 - 校務綜合整合平台</title>
+  <title>均一國小部 - 校務整合平台</title>
   
   <!-- CSS 框架與圖示庫 -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -1686,15 +1686,27 @@
         const btn = event.currentTarget;
         const originalText = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> 處理中...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> 快速生成中...';
 
+        // 🌟 最佳速度與清晰度平衡參數
         const opt = {
-          margin: 0,
-          filename: `${this.data.currentClass}_個人通知單_${document.getElementById('reportStartDate').value}.pdf`,
-          image: { type: 'jpeg', quality: 1.0 },
-          html2canvas: { scale: 4, dpi: 300, useCORS: true, letterRendering: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
-          pagebreak: { mode: ['css', 'legacy'] }
+          margin:       0,
+          filename:     `${this.data.currentClass}_個人通知單_${document.getElementById('reportStartDate').value}.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 }, // 使用高品質 JPEG，速度比 PNG 快數倍
+          html2canvas:  { 
+            scale: 2,               // 2 倍清晰度足以滿足 A4 列印，且運算速度快
+            useCORS: true, 
+            letterRendering: true,
+            logging: false,         // 關閉 log 提升效能
+            scrollY: 0,
+            scrollX: 0
+          },
+          jsPDF:        { 
+            unit: 'mm', 
+            format: 'a4', 
+            orientation: 'portrait' 
+          },
+          pagebreak:    { mode: ['css', 'legacy'] }
         };
 
         html2pdf().set(opt).from(container).save().then(() => {
@@ -1702,7 +1714,7 @@
           btn.innerHTML = originalText;
         }).catch(err => {
           console.error("PDF 匯出錯誤:", err);
-          alert("匯出失敗，請嘗試使用列印功能選擇『儲存為 PDF』");
+          alert("匯出失敗，請嘗試使用列印功能選擇『另存為 PDF』");
           btn.disabled = false;
           btn.innerHTML = originalText;
         });
