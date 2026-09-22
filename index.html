@@ -1206,14 +1206,14 @@
       },
 
       saveLocal() {
-        localStorage.setItem('homework_data', JSON.stringify({
-          classes: this.data.classes,
-          subjects: this.data.subjects,
-          students: this.data.students,
-          records: this.data.records,
-          statsOverrides: this.data.statsOverrides
-        }));
-      },
+  localStorage.setItem('homework_data', JSON.stringify({
+    classes: this.data.classes,
+    subjects: this.data.subjects,
+    students: this.data.students,
+    records: this.data.records,
+    statsOverrides: this.data.statsOverrides
+  }));
+},
 
       save() {
         this.saveLocal();
