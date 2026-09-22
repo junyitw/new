@@ -363,10 +363,13 @@
               <button id="btnToggleSatAtt" onclick="app.toggleSaturday()" class="px-3 py-1 text-sm font-semibold rounded border border-amber-500 text-amber-700 bg-amber-50 hover:bg-amber-100 flex items-center gap-1 transition">
                 <i class="fa-solid fa-calendar-plus"></i> <span>啟用補課週六</span>
               </button>
-            </div>
-            <button onclick="app.printPage()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-sm shadow flex items-center gap-2"><i class="fa-solid fa-print"></i> 列印簽到表</button>
-          </div>
-
+<!-- 🌟 新增：出缺勤頁面的雲端同步狀態標籤 -->
+      <span id="attendance-sync-status" class="text-xs font-bold text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+        <i class="fa-solid fa-check"></i> 雲端已同步
+      </span>
+    </div>
+    <button onclick="app.printPage()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-sm shadow flex items-center gap-2"><i class="fa-solid fa-print"></i> 列印簽到表</button>
+  </div>
           <div class="flex-1 overflow-auto p-4 table-container bg-gray-50">
             <div class="w-full overflow-x-auto bg-white shadow-sm pb-2">
               <table class="w-full text-lg border-collapse">
@@ -897,22 +900,32 @@
       },
 
       updateSyncUI(status) {
-        const el = document.getElementById('homework-sync-status');
-        if (!el) return;
-        if (status === 'syncing') {
-          el.className = "text-xs font-bold text-amber-600 flex items-center gap-1.5 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200";
-          el.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 雲端同步中...`;
-        } else if (status === 'pending') {
-          el.className = "text-xs font-bold text-blue-600 flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200";
-          el.innerHTML = `<i class="fa-solid fa-clock"></i> 等候排程同步 (1.5s)`;
-        } else if (status === 'error') {
-          el.className = "text-xs font-bold text-rose-600 flex items-center gap-1.5 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200";
-          el.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 本機暫存 (未同步)`;
-        } else {
-          el.className = "text-xs font-bold text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200";
-          el.innerHTML = `<i class="fa-solid fa-check"></i> 雲端已同步`;
-        }
-      },
+  // 同時抓取「作業登記」與「出缺勤登記」兩處的狀態標籤
+  const elements = [
+    document.getElementById('homework-sync-status'),
+    document.getElementById('attendance-sync-status')
+  ].filter(Boolean);
+
+  elements.forEach(el => {
+    if (status === 'pending') {
+      // 1. 等待 1.5 秒階段：藍色
+      el.className = "text-xs font-bold text-blue-600 flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 transition-all";
+      el.innerHTML = `<i class="fa-solid fa-clock"></i> 等待1.5秒`;
+    } else if (status === 'syncing') {
+      // 2. 同步中階段：黃/琥珀色旋轉
+      el.className = "text-xs font-bold text-amber-600 flex items-center gap-1.5 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 transition-all";
+      el.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 雲端同步中`;
+    } else if (status === 'error') {
+      // 錯誤/本機暫存：紅色
+      el.className = "text-xs font-bold text-rose-600 flex items-center gap-1.5 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 transition-all";
+      el.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 同步失敗 (本機暫存)`;
+    } else {
+      // 3. 已同步完成階段：綠色
+      el.className = "text-xs font-bold text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 transition-all";
+      el.innerHTML = `<i class="fa-solid fa-check"></i> 雲端已同步`;
+    }
+  });
+},
 
       scheduleCloudSync() {
         this.updateSyncUI('pending');
