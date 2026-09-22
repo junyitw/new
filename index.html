@@ -126,7 +126,6 @@
         border: none !important;
       }
 
-      /* 確保如果從作業系統觸發列印時，homework 模組強制顯示 */
       body.printing-homework #module-homework { display: flex !important; }
 
       #print-only-header { display: block !important; margin-bottom: 2px !important; }
@@ -835,7 +834,6 @@
       async init() {
         showGlobalToast("正在從雲端同步作業與出缺勤資料...", "info");
         
-        // 1. 嘗試從 GAS 雲端抓取資料
         let cloudLoaded = false;
         try {
           const res = await fetch(`${HOMEWORK_GAS_URL}?action=getData`);
@@ -846,7 +844,6 @@
             this.data.students = json.data.students || [];
             this.data.records = json.data.records || {};
             
-            // 同時更新本機快取
             localStorage.setItem('homework_data', JSON.stringify({
               classes: this.data.classes,
               subjects: this.data.subjects,
@@ -861,7 +858,6 @@
           console.warn("無法連線至雲端，改用本機快取", err);
         }
 
-        // 2. 如果雲端讀取失敗（例如無網路），則讀取本機 localStorage
         if (!cloudLoaded) {
           const saved = localStorage.getItem('homework_data');
           let parsed = {};
@@ -893,7 +889,6 @@
         this.render();
       },
 
-      // 🌟 教師登入/登出切換與驗證
       toggleAuth() {
         if (this.data.isLoggedIn) {
           if (confirm("確定要登出教師編輯模式嗎？")) {
@@ -901,14 +896,18 @@
             this.updateAuthUI();
             showGlobalToast("已登出，目前為檢視模式", "info");
             this.render();
+            // 同時重新整理教室狀況回報的管理後台預覽，以即時隱藏刪除按鈕
+            renderSchoolRecords();
           }
         } else {
           const pwd = prompt("請輸入教師編輯密碼：");
-          if (pwd === "je223301") { // 預設密碼可在此自訂
+          if (pwd === "je223301") {
             this.data.isLoggedIn = true;
             this.updateAuthUI();
             showGlobalToast("✅ 教師身分驗證成功，已解鎖編輯權限！");
             this.render();
+            // 同時重新整理教室狀況回報的管理後台預覽，以即時顯示刪除按鈕
+            renderSchoolRecords();
           } else if (pwd !== null) {
             showGlobalToast("❌ 密碼錯誤！", "error");
           }
@@ -943,7 +942,6 @@
         if (!sel) return;
         sel.innerHTML = '';
         
-        // 🌟 依照班級名稱內的數字（1~6年級）進行升冪排序
         const sortedClasses = [...this.data.classes].sort((a, b) => {
           const numA = parseInt(a.replace(/[^0-9]/g, '')) || 0;
           const numB = parseInt(b.replace(/[^0-9]/g, '')) || 0;
@@ -956,7 +954,6 @@
           sel.appendChild(o);
         });
         
-        // 如果目前選取的班級不在排序後清單中，預設選第一個
         if (!sortedClasses.includes(this.data.currentClass) && sortedClasses.length > 0) {
           this.data.currentClass = sortedClasses[0];
         }
@@ -1109,10 +1106,8 @@
           statsOverrides: this.data.statsOverrides
         };
 
-        // 1. 隨時更新本機快取
         localStorage.setItem('homework_data', JSON.stringify(payload));
 
-        // 2. 如果有指定單一變動的 key 與 val，則進行快速增量更新
         if (specificKey !== null) {
           try {
             await fetch(HOMEWORK_GAS_URL, {
@@ -1121,12 +1116,10 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ action: 'updateRecord', key: specificKey, value: specificVal })
             });
-            console.log("增量同步成功: ", specificKey);
           } catch (err) {
             console.warn("增量同步失敗", err);
           }
         } else {
-          // 若為整批匯入或整批修改，則走原本的 syncAll
           try {
             await fetch(HOMEWORK_GAS_URL, {
               method: 'POST',
@@ -1429,7 +1422,7 @@
 
       saveStats() {
         if (!this.data.isLoggedIn) return alert("❌ 權限不足：請先點擊右上角「教師登入」才能儲存修訂！");
-        const st = this.data.students; // 移除班級限制，直接抓取所有學生
+        const st = this.data.students;
         st.forEach(s => {
           const hX = parseInt(document.getElementById(`stat_${s.id}_hX`).value) || 0;
           const hT = parseInt(document.getElementById(`stat_${s.id}_hT`).value) || 0;
@@ -1447,7 +1440,7 @@
       resetStats() {
         if (!this.data.isLoggedIn) return alert("❌ 權限不足：請先點擊右上角「教師登入」才能重置數據！");
         if(!confirm("確定要清除所有手動修改的數據，恢復成系統自動計算嗎？")) return;
-        const st = this.data.students; // 移除班級限制，直接抓取所有學生
+        const st = this.data.students;
         st.forEach(s => { delete this.data.statsOverrides[s.id]; });
         this.save();
         this.renderStats();
@@ -1987,6 +1980,10 @@
         c.innerHTML = '<div class="col-span-3 text-center py-12 bg-white rounded-2xl border border-dashed border-gray-300 text-gray-400 font-medium">目前尚無符合的教室通報紀錄</div>';
         return;
       }
+
+      // 🌟 核心修改：判斷教師是否已登入，若已登入才渲染刪除按鈕
+      const isLoggedIn = app.data && app.data.isLoggedIn;
+
       c.innerHTML = list.map(rec => {
         const photosHtml = (rec.photos || []).map((p, idx) => {
           const imgSrc = sanitizeImageUrl(p.base64);
@@ -2003,11 +2000,16 @@
           `;
         }).join('');
 
+        // 🌟 如果 isLoggedIn 為 true，則顯示刪除按鈕；否則留空
+        const deleteBtnHtml = isLoggedIn 
+          ? `<button onclick="deleteSchoolRecord('${rec.id}', '${rec.folderId || ''}')" title="同步刪除 Drive 與 Sheet 檔案" class="text-gray-400 hover:text-rose-500 p-1 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>` 
+          : `<span class="text-xs text-gray-300 select-none" title="需教師登入才可刪除"><i class="fa-solid fa-lock text-[10px]"></i> 唯讀</span>`;
+
         return `
           <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition">
             <div class="p-4 border-b border-gray-100 flex items-center justify-between">
               <span class="font-bold text-gray-900">${rec.className}</span>
-              <button onclick="deleteSchoolRecord('${rec.id}', '${rec.folderId || ''}')" title="同步刪除 Drive 與 Sheet 檔案" class="text-gray-400 hover:text-rose-500 p-1 rounded-lg transition"><i class="fa-solid fa-trash"></i></button>
+              ${deleteBtnHtml}
             </div>
             <div class="px-4 py-2 bg-gray-50/70 border-b border-gray-100 text-xs text-gray-500 flex justify-between">
               <span>導師：${rec.reporter}</span>
@@ -2024,6 +2026,12 @@
     }
 
     async function deleteSchoolRecord(id, folderId) {
+      // 🌟 雙重防護：執行刪除前再次檢查登入狀態
+      if (!app.data || !app.data.isLoggedIn) {
+        showGlobalToast("❌ 權限不足：請先點擊右上角「教師登入」才能刪除通報紀錄！", "error");
+        return;
+      }
+
       if(!confirm("確定要刪除這筆通報嗎？\n此動作將一併清除試算表資料列及 Drive 資料夾！")) return;
       schoolReportsList = schoolReportsList.filter(r => r.id !== id);
       localStorage.setItem('school_reports_data', JSON.stringify(schoolReportsList));
