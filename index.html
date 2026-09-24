@@ -96,6 +96,10 @@
     .report-page {
       width: 210mm; min-height: 297mm; padding: 15mm 20mm; margin: 0 auto; background: white;
       box-shadow: 0 0 10px rgba(0,0,0,0.1); position: relative; box-sizing: border-box; display: flex; flex-direction: column;
+/* 🌟 加入以下三行以大幅改善字體與線條列印銳利度 */
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
     }
     .report-table { width: 100%; border: 3px solid black; margin: 10px 0; }
     .report-table th, .report-table td { border: 1px solid black; padding: 8px; text-align: center; font-size: 16px; }
@@ -1707,17 +1711,19 @@
           filename:     `${this.data.currentClass}_個人通知單_${document.getElementById('reportStartDate').value}.pdf`,
           image:        { type: 'jpeg', quality: 0.98 }, // 使用高品質 JPEG，速度比 PNG 快數倍
           html2canvas:  { 
-            scale: 2,               // 2 倍清晰度足以滿足 A4 列印，且運算速度快
+            scale: 3,               // 將 scale 提升至 3 (約 288~300 DPI)
             useCORS: true, 
             letterRendering: true,
             logging: false,         // 關閉 log 提升效能
             scrollY: 0,
             scrollX: 0
+            dpi: 300
           },
           jsPDF:        { 
             unit: 'mm', 
             format: 'a4', 
-            orientation: 'portrait' 
+            orientation: 'portrait'
+            compress: true            // 啟用 PDF 內部流壓縮，保持清晰同時控制檔案大小 
           },
           pagebreak:    { mode: ['css', 'legacy'] }
         };
