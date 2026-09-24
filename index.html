@@ -92,20 +92,25 @@
     .print-only-cell { display: none; }
     .print-footer { display: none; }
 
-    /* 個人通知單樣式 */
+    /* 個人通知單樣式 - 列印深黑高對比優化 */
     .report-page {
-      width: 210mm; min-height: 297mm; padding: 15mm 20mm; margin: 0 auto; background: white;
+      width: 210mm; min-height: 297mm; padding: 15mm 20mm; margin: 0 auto; 
+      background: #ffffff !important;
+      color: #000000 !important; /* 🌟 強制純黑，徹底消除 gray-800 的灰階感 */
       box-shadow: 0 0 10px rgba(0,0,0,0.1); position: relative; box-sizing: border-box; display: flex; flex-direction: column;
-/* 🌟 加入以下三行以大幅改善字體與線條列印銳利度 */
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       text-rendering: optimizeLegibility;
+      font-weight: 600 !important; /* 🌟 字體微加粗，大幅增加雷射碳粉覆蓋度，黑度立現 */
     }
-    .report-table { width: 100%; border: 3px solid black; margin: 10px 0; }
-    .report-table th, .report-table td { border: 1px solid black; padding: 8px; text-align: center; font-size: 16px; }
-    .report-table th { font-weight: bold; background-color: white; }
-    .cut-line { border-top: 1px dashed black; width: 100%; margin: 30px 0; position: relative; }
-    .cut-line::after { content: '✂'; position: absolute; left: -15px; top: -12px; font-size: 20px; }
+    .report-page * {
+      color: #000000 !important; /* 🌟 確保所有子標籤、說明文字均為純黑 */
+    }
+    .report-table { width: 100%; border: 3px solid #000000; margin: 10px 0; border-collapse: collapse; }
+    .report-table th, .report-table td { border: 1.5px solid #000000 !important; padding: 8px; text-align: center; font-size: 16px; font-weight: bold; }
+    .report-table th { font-weight: 800; background-color: #ffffff; }
+    .cut-line { border-top: 1.5px dashed #000000 !important; width: 100%; margin: 30px 0; position: relative; }
+    .cut-line::after { content: '✂'; position: absolute; left: -15px; top: -12px; font-size: 20px; color: #000000 !important; }
 
     #print-container-school { display: none; }
 
@@ -1695,7 +1700,7 @@
 
       exportAllReportsPDF() {
         const container = document.getElementById('reportsContainer');
-        if (!container.hasChildNodes()) {
+        if (!container || !container.hasChildNodes()) {
           alert("目前沒有可匯出的通知單，請先確認日期範圍。");
           return;
         }
@@ -1703,27 +1708,27 @@
         const btn = event.currentTarget;
         const originalText = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> 快速生成中...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> 300DPI 高畫質生成中...';
 
-        // 🌟 最佳速度與清晰度平衡參數
+        // 🌟 關鍵相容設定：直接利用現有 html2pdf 套件，修正卷軸位移與清晰度
         const opt = {
           margin:       0,
           filename:     `${this.data.currentClass}_個人通知單_${document.getElementById('reportStartDate').value}.pdf`,
-          image:        { type: 'jpeg', quality: 0.98 }, // 使用高品質 JPEG，速度比 PNG 快數倍
+          image:        { type: 'jpeg', quality: 0.98 },
           html2canvas:  { 
-            scale: 3,               // 將 scale 提升至 3 (約 288~300 DPI)
+            scale: 2.5,               // 🌟 2.5 倍為全班 20~30 頁輸出時最穩定的高畫質極限（約 240~300 DPI）
             useCORS: true, 
             letterRendering: true,
-            logging: false,         // 關閉 log 提升效能
-            scrollY: 0,
+            logging: false,
+            scrollY: -window.scrollY, // 🌟 解決空白關鍵 1：重置畫面捲動位移，避免 Canvas 裁切到空白視區
             scrollX: 0,
-            dpi: 300
+            windowWidth: document.documentElement.offsetWidth
           },
           jsPDF:        { 
             unit: 'mm', 
             format: 'a4', 
             orientation: 'portrait',
-            compress: true            // 啟用 PDF 內部流壓縮，保持清晰同時控制檔案大小 
+            compress: true
           },
           pagebreak:    { mode: ['css', 'legacy'] }
         };
@@ -1731,6 +1736,7 @@
         html2pdf().set(opt).from(container).save().then(() => {
           btn.disabled = false;
           btn.innerHTML = originalText;
+          showGlobalToast("✅ 全班高畫質個人通知單匯出完成！", "success");
         }).catch(err => {
           console.error("PDF 匯出錯誤:", err);
           alert("匯出失敗，請嘗試使用列印功能選擇『另存為 PDF』");
