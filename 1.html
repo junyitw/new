@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
     
-    <!-- React 18 UMD (原生瀏覽器執行，無跨域/file協議阻擋問題) -->
+    <!-- React 18 UMD (原生瀏覽器執行) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
@@ -155,7 +155,6 @@
             return list;
         }
 
-        // 智慧化解衝堂演算法
         function resolveAllConflicts(lessons, assignments, rooms) {
             let workingLessons = JSON.parse(JSON.stringify(lessons));
             let resolvedCount = 0;
@@ -195,7 +194,6 @@
                                 if (pClassOccupied) continue;
                             }
 
-                            // 執行調動
                             movableLesson.day = day;
                             movableLesson.periodId = p;
                             resolvedCount++;
@@ -213,7 +211,6 @@
             return { resolvedLessons: workingLessons, resolvedCount, remainingConflicts: remaining };
         }
 
-        // 校正連堂配對
         function validateDoublePeriods(lessons) {
             return lessons.map(l => {
                 if (!l.isDouble) return l;
@@ -786,6 +783,9 @@
             const [aiPrompt, setAiPrompt] = useState('');
             const [isAILoading, setIsAILoading] = useState(false);
 
+            const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
+            const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || '');
+
             const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
             const [toast, setToast] = useState(null);
 
@@ -820,8 +820,7 @@
             const teacherLessonCounts = useMemo(() => {
                 const counts = {};
                 lessons.forEach(l => {
-                    (l.teacher || '').split(',').forEach(n => {
-                        const name = n.trim();
+                    (l.teacher || '').split(',').map(n => n.trim()).forEach(name => {
                         if (name) counts[name] = (counts[name] || 0) + 1;
                     });
                 });
@@ -839,7 +838,7 @@
             const filteredLessons = useMemo(() => {
                 switch (viewMode) {
                     case 'Class': return lessons.filter(l => l.classId === viewFilter);
-                    case 'Teacher': return lessons.filter(l => l.teacher.split(',').map(n => n.trim()).includes(viewFilter));
+                    case 'Teacher': return lessons.filter(l => (l.teacher || '').split(',').map(n => n.trim()).includes(viewFilter));
                     case 'Room': return lessons.filter(l => l.room === viewFilter);
                     case 'Conflict': return lessons.filter(l => conflictingLessonIds.has(l.id));
                     default: return lessons;
@@ -874,7 +873,7 @@
                 });
 
                 const nextLessons = lessons.map(l => {
-                    const lTeachers = l.teacher.split(',').map(n => n.trim());
+                    const lTeachers = (l.teacher || '').split(',').map(n => n.trim());
                     const curTutor = classToTutor[l.classId];
                     if (curTutor && lTeachers.includes(curTutor)) {
                         let incomingTutor = '';
@@ -1002,7 +1001,98 @@
                 setEditingLesson(null);
             };
 
-            // 全校課表 Word 打包匯出（含班級與全體教師課表）
+            // AI 自動排課連線 Gemini 官方 API
+            const runAIScheduling = async () => {
+                if (!aiPrompt.trim()) return;
+                if (!geminiApiKey.trim()) {
+                    showToast('請先點擊右上角「🔑 設定 API Key」輸入金鑰！', 'error');
+                    setIsKeyModalOpen(true);
+                    return;
+                }
+
+                setIsAILoading(true);
+                try {
+                    const lockedLessons = lessons.filter(l => l.isLocked);
+                    
+                    const promptText = `你是一位資深教務排課專家。請根據下列規則與資料為全校排課：
+1. 班級列表：${JSON.stringify(CLASSES)}
+2. 教師與配課需求（JSON）：${JSON.stringify(assignments)}
+3. 必須保留之已鎖定課程（JSON）：${JSON.stringify(lockedLessons)}
+4. 排課作息限制：
+   - 星期三下午全校不排課（第5-7節禁排）
+   - 全校第7節一律不排課
+   - 101班每天下午放學（第5-7節禁排）
+   - 201班週一、週三、週五下午放學（第5-7節禁排）
+   - 連堂課程必須排在成對節次（1-2節、3-4節、5-6節）
+   - 同一教師同一節次不得衝堂
+5. 使用者偏好要求：${aiPrompt}
+
+【重要輸出規定】：
+請直接回傳純 JSON 陣列（Array），不要任何 Markdown 標記或文字說明。格式如下：
+[
+  {
+    "id": "隨機字串",
+    "classId": "101",
+    "day": "Mon",
+    "periodId": 1,
+    "subject": "國語",
+    "teacher": "王老師",
+    "room": "",
+    "color": "bg-blue-100 border-blue-200",
+    "isDouble": false,
+    "isLocked": false
+  }
+]`;
+
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: promptText }] }],
+                            generationConfig: { responseMimeType: "application/json" }
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errData = await response.json().catch(() => ({}));
+                        throw new Error(errData.error?.message || `HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    let responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    responseText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+                    const newLessons = JSON.parse(responseText);
+                    if (Array.isArray(newLessons)) {
+                        const sanitized = newLessons.map(l => ({
+                            ...l,
+                            id: l.id || Math.random().toString(36).substr(2, 9),
+                            periodId: Number(l.periodId),
+                            day: DAYS.includes(l.day) ? l.day : 'Mon',
+                            color: l.color || COLOR_OPTIONS[0].value,
+                            isLocked: false,
+                            isDouble: Boolean(l.isDouble)
+                        })).filter(l => !isNaN(l.periodId) && CLASSES.includes(l.classId) && isClassSlotAvailable(l.classId, l.day, l.periodId).available);
+
+                        const combined = [...lockedLessons, ...sanitized];
+                        const { resolvedLessons, resolvedCount, remainingConflicts } = resolveAllConflicts(combined, assignments, rooms);
+
+                        setLessons(resolvedLessons);
+                        setIsAIModalOpen(false);
+                        setAiPrompt('');
+                        showToast(`✨ AI 自動排課成功！共排入 ${sanitized.length} 節課程（保留 ${lockedLessons.length} 節鎖定課程）。`, 'success');
+                    } else {
+                        throw new Error('AI 回傳格式非陣列格式');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showToast(`AI 運算失敗：${e.message || '請確認 API Key 是否有效'}`, 'error');
+                } finally {
+                    setIsAILoading(false);
+                }
+            };
+
+            // 全校課表 Word 打包匯出
             const handleExportWord = () => {
                 let html = `
                 <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -1042,7 +1132,7 @@
                     const getCells = (periodId) => DAYS.map(day => {
                         const l = type === 'Class'
                             ? all.find(x => x.classId === id && x.day === day && x.periodId === periodId)
-                            : all.find(x => x.teacher.includes(id) && x.day === day && x.periodId === periodId);
+                            : all.find(x => (x.teacher || '').includes(id) && x.day === day && x.periodId === periodId);
                         if (l) return `<td><span class="lesson-subject">${l.subject}</span><span class="lesson-teacher">${type === 'Class' ? l.teacher : l.classId + ' 班'}</span>${l.room ? `<br><span class="lesson-room">📍${l.room}</span>` : ''}</td>`;
                         return '<td></td>';
                     }).join('');
@@ -1083,7 +1173,7 @@
 
                 // 教師分頁
                 teachers.forEach(t => {
-                    const tLessons = lessons.filter(l => l.teacher.includes(t));
+                    const tLessons = lessons.filter(l => (l.teacher || '').includes(t));
                     const subjs = Array.from(new Set(tLessons.map(l => l.subject))).sort();
                     html += `
                     <div class="page-container">
@@ -1148,6 +1238,11 @@
                                 onClick: () => setIsAIModalOpen(true),
                                 className: 'px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl text-xs font-black shadow-xl'
                             }, '🪄 AI 排課'),
+                            h('button', {
+                                onClick: () => setIsKeyModalOpen(true),
+                                className: 'px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl text-xs font-black shadow-xl transition-all',
+                                title: '設定 Google Gemini API Key'
+                            }, '🔑 設定 API Key'),
                             h('div', { className: 'h-8 w-px bg-gray-200 mx-2' }),
                             h('button', {
                                 onClick: () => fileInputRef.current.click(),
@@ -1246,12 +1341,39 @@
                     h('button', { onClick: () => setToast(null), className: 'ml-2 text-white/60 hover:text-white font-black' }, '✕')
                 ]),
 
+                // API Key 設定彈窗
+                isKeyModalOpen && h('div', { className: 'fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 no-print' }, [
+                    h('div', { className: 'bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden p-8 animate-in zoom-in-95' }, [
+                        h('h3', { className: 'text-2xl font-black text-gray-900 mb-2' }, '🔑 設定 Gemini API Key'),
+                        h('p', { className: 'text-gray-500 text-xs font-bold mb-4' }, '請輸入您的 Google AI Studio API Key，金鑰將直接安全儲存在您目前的瀏覽器中：'),
+                        h('input', {
+                            type: 'password',
+                            className: 'w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 font-mono text-sm outline-none focus:border-amber-500 mb-6',
+                            placeholder: 'AIzaSy...',
+                            value: geminiApiKey,
+                            onChange: e => setGeminiApiKey(e.target.value)
+                        }),
+                        h('div', { className: 'flex gap-4' }, [
+                            h('button', { onClick: () => setIsKeyModalOpen(false), className: 'flex-1 py-4 text-gray-500 font-black rounded-2xl hover:bg-gray-100' }, '取消'),
+                            h('button', {
+                                onClick: () => {
+                                    localStorage.setItem('GEMINI_API_KEY', geminiApiKey.trim());
+                                    setIsKeyModalOpen(false);
+                                    showToast('✅ API Key 已成功儲存！', 'success');
+                                },
+                                className: 'flex-1 py-4 bg-amber-500 text-white font-black rounded-2xl hover:bg-amber-600 shadow-xl'
+                            }, '儲存設定')
+                        ])
+                    ])
+                ]),
+
                 // AI 排課彈窗
                 isAIModalOpen && h('div', { className: 'fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 no-print' }, [
                     h('div', { className: 'bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden' }, [
                         h('div', { className: 'p-10 bg-indigo-900 text-white' }, [
                             h('h3', { className: 'text-3xl font-black mb-2' }, 'AI 智能排課助理'),
-                            h('p', { className: 'text-indigo-200 text-sm font-bold' }, '請描述您的排課偏好或限制，系統將為您生成方案。已鎖定課程（🔒）會受到保護。')
+                            h('p', { className: 'text-indigo-200 text-sm font-bold' }, '請描述您的排課偏好或限制，系統將由 Gemini 生成方案。已鎖定課程（🔒）會受到保護。'),
+                            h('div', { className: 'mt-3 text-xs text-amber-300 font-bold' }, geminiApiKey ? '🟢 已連線自訂 API Key' : '🔴 尚未設定 API Key（請點擊右上角「🔑 設定 API Key」）')
                         ]),
                         h('div', { className: 'p-10 space-y-6' }, [
                             h('textarea', {
@@ -1263,17 +1385,10 @@
                             h('div', { className: 'flex gap-4' }, [
                                 h('button', { onClick: () => setIsAIModalOpen(false), className: 'flex-1 py-5 text-gray-500 font-black rounded-2xl hover:bg-gray-100' }, '取消'),
                                 h('button', {
-                                    onClick: () => {
-                                        setIsAILoading(true);
-                                        setTimeout(() => {
-                                            handleAutoResolveConflicts();
-                                            setIsAILoading(false);
-                                            setIsAIModalOpen(false);
-                                            setAiPrompt('');
-                                        }, 1000);
-                                    },
-                                    className: 'flex-[2] py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl hover:bg-indigo-700'
-                                }, isAILoading ? '🤖 運算排課中...' : '✨ 開始排課')
+                                    onClick: runAIScheduling,
+                                    disabled: isAILoading,
+                                    className: 'flex-[2] py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl hover:bg-indigo-700 disabled:opacity-50'
+                                }, isAILoading ? '🤖 Gemini 運算排課中...' : '✨ 開始排課')
                             ])
                         ])
                     ])
