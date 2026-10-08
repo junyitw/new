@@ -4,124 +4,45 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>均一學校排課與匯出系統</title>
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
     
-    <!-- React & ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- Babel (用於在瀏覽器端編譯 TSX) -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- React 18 UMD (原生瀏覽器執行，無跨域/file協議阻擋問題) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
     <style>
-        body {
-            font-family: 'Inter', 'Noto Sans TC', sans-serif;
-            background-color: #f9fafb;
-        }
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #e2e8f0;
-            border-radius: 10px;
-        }
+        body { font-family: 'Inter', 'Noto Sans TC', sans-serif; background-color: #f9fafb; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
         @media print {
-            aside, button, .no-print {
-                display: none !important;
-            }
-            main {
-                padding: 0 !important;
-                height: auto !important;
-                overflow: visible !important;
-            }
-            .bg-white {
-                border: none !important;
-                box-shadow: none !important;
-            }
-            .overflow-x-auto {
-                overflow: visible !important;
-            }
-            h1, h2 {
-                color: black !important;
-            }
+            aside, button, .no-print { display: none !important; }
+            main { padding: 0 !important; height: auto !important; overflow: visible !important; }
+            .bg-white { border: none !important; box-shadow: none !important; }
+            .overflow-x-auto { overflow: visible !important; }
+            h1, h2 { color: black !important; }
         }
     </style>
 </head>
 <body class="bg-gray-50 antialiased">
     <div id="root"></div>
 
-    <script type="text/babel" data-presets="react,typescript" data-type="module">
-        import { GoogleGenAI, Type } from "https://esm.sh/@google/genai";
-
-        // 防止前端存取 process.env 報錯
-        window.process = {
-            env: {
-                API_KEY: '請在此填入您的_GEMINI_API_KEY'
-            }
-        };
-
-        const { useState, useMemo, useRef, useEffect } = React;
+    <script>
+        const { useState, useMemo, useRef, useEffect, createElement: h, Fragment } = React;
 
         /* ==========================================
-           TYPES (補齊缺少的 types.ts)
+           常數與排課規則定義 (Constants & Rules)
            ========================================== */
-        type DayOfWeek = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
-        type ViewMode = 'Master' | 'Class' | 'Teacher' | 'Room' | 'Conflict' | 'TeacherAdmin' | 'RoomAdmin';
-        
-        interface TimeSlot {
-            id: number;
-            label: string;
-            time: string;
-            type: 'class' | 'break' | 'event';
-        }
+        const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+        const CLASSES = ['101', '201', '301', '401', '501', '601'];
+        const INITIAL_ROOMS = ['圖書館', '音樂教室', '手工教室', '泥塑教室', '美術教室', '活動中心'];
 
-        interface Lesson {
-            id: string;
-            classId: string;
-            day: DayOfWeek;
-            periodId: number;
-            subject: string;
-            teacher: string;
-            room?: string;
-            color: string;
-            isLocked?: boolean;
-            isDouble?: boolean;
-        }
-
-        interface Assignment {
-            subject: string;
-            classId: string;
-            sessions: number;
-            isDouble?: boolean;
-        }
-
-        interface Conflict {
-            type: 'Teacher' | 'Room' | 'Class' | 'Mask';
-            name: string;
-            day: DayOfWeek;
-            periodId: number;
-            lessonIds: string[];
-        }
-
-        interface ColorOption {
-            label: string;
-            value: string;
-        }
-
-        /* ==========================================
-           CONSTANTS (constants.ts)
-           ========================================== */
-        const DAYS: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-
-        const TIME_SLOTS: TimeSlot[] = [
+        const TIME_SLOTS = [
             { id: 0, label: 'Morning', time: '07:50-08:00', type: 'event' },
             { id: 1, label: '1', time: '08:00-09:00', type: 'class' },
             { id: 2, label: '2', time: '09:00-10:00', type: 'class' },
@@ -132,46 +53,31 @@
             { id: 12, label: 'Quiet', time: '12:30-13:20', type: 'break' },
             { id: 5, label: '5', time: '13:20-14:00', type: 'class' },
             { id: 6, label: '6', time: '14:10-14:50', type: 'class' },
-            { id: 7, label: '7', time: '14:50-15:30', type: 'class' },
+            { id: 7, label: '7', time: '14:50-15:30', type: 'class' }
         ];
 
-        const COLOR_OPTIONS: ColorOption[] = [
+        const COLOR_OPTIONS = [
             { label: '主課程', value: 'bg-blue-100 border-blue-200' },
             { label: '英文', value: 'bg-purple-100 border-purple-200' },
             { label: '藝術', value: 'bg-orange-100 border-orange-200' },
             { label: '活動', value: 'bg-yellow-100 border-yellow-200' },
             { label: '練習', value: 'bg-green-100 border-green-200' },
-            { label: '晨圈', value: 'bg-pink-100 border-pink-200' },
+            { label: '晨圈', value: 'bg-pink-100 border-pink-200' }
         ];
 
-        const INITIAL_LESSONS: Lesson[] = [];
-        const STATIC_TEACHERS: string[] = [];
-        const CLASSES = ['101', '201', '301', '401', '501', '601'];
-        const INITIAL_ROOMS = ['圖書館', '音樂教室', '手工教室', '泥塑教室', '美術教室', '活動中心'];
-
-        function isClassSlotAvailable(classId: string, day: DayOfWeek, periodId: number): { available: boolean; reason?: string } {
-            if (periodId < 1 || periodId > 7) {
-                return { available: false, reason: '非課程時段' };
-            }
-            if (periodId === 7) {
-                return { available: false, reason: '第7節全校不排課' };
-            }
-            if (day === 'Wed' && periodId > 4) {
-                return { available: false, reason: '週三下午全校不排課' };
-            }
-            if (classId === '101' && periodId > 4) {
-                return { available: false, reason: '一年級下午放學' };
-            }
-            if (classId === '201') {
-                if ((day === 'Mon' || day === 'Wed' || day === 'Fri') && periodId > 4) {
-                    return { available: false, reason: '二年級週一三五下午放學' };
-                }
+        function isClassSlotAvailable(classId, day, periodId) {
+            if (periodId < 1 || periodId > 7) return { available: false, reason: '非課程時段' };
+            if (periodId === 7) return { available: false, reason: '第7節全校不排課' };
+            if (day === 'Wed' && periodId > 4) return { available: false, reason: '週三下午全校不排課' };
+            if (classId === '101' && periodId > 4) return { available: false, reason: '一年級下午放學' };
+            if (classId === '201' && (day === 'Mon' || day === 'Wed' || day === 'Fri') && periodId > 4) {
+                return { available: false, reason: '二年級週一三五下午放學' };
             }
             return { available: true };
         }
 
-        function getDoublePeriodPartner(periodId: number): number | null {
-            switch (periodId) {
+        function getDoublePeriodPartner(periodId) {
+            switch (Number(periodId)) {
                 case 1: return 2;
                 case 2: return 1;
                 case 3: return 4;
@@ -182,634 +88,909 @@
             }
         }
 
-        /* ==========================================
-           MOCKS (補齊缺少的 conflictResolver.ts)
-           ========================================== */
-        // 以下為為了讓介面不報錯的預設空實作。請替換為您真實的程式碼。
-        const findAllConflicts = (lessons: Lesson[]): Conflict[] => [];
-        const resolveAllConflicts = (lessons: Lesson[], assignments: any, rooms: any, aiPrompt?: string) => ({ resolvedLessons: lessons, resolvedCount: 0, remainingConflicts: [] });
-        const validateDoublePeriods = (lessons: Lesson[], assignments?: any) => lessons;
-        const generateDeterministicSchedule = (classes: any, remainingAssignments: any, lockedLessons: any, rooms: any, aiPrompt: string) => [];
-        const enforceSchedulingPreferences = (lessons: Lesson[], aiPrompt: string, assignments: any, rooms: any) => lessons;
-        const pruneOverAssignments = (lessons: Lesson[], assignments: any, lockedLessons: any) => lessons;
-        const isSameSubject = (subj1: string, subj2: string, classId?: string) => subj1 === subj2;
+        function findAllConflicts(lessons) {
+            const list = [];
+            const teacherMap = new Map();
+            const roomMap = new Map();
+            const classMap = new Map();
 
+            lessons.forEach(l => {
+                const names = (l.teacher || '').split(',').map(n => n.trim()).filter(Boolean);
+                names.forEach(name => {
+                    const key = `${l.day}-${l.periodId}-${name}`;
+                    if (!teacherMap.has(key)) teacherMap.set(key, []);
+                    teacherMap.get(key).push(l.id);
+                });
+                if (l.room) {
+                    const key = `${l.day}-${l.periodId}-${l.room}`;
+                    if (!roomMap.has(key)) roomMap.set(key, []);
+                    roomMap.get(key).push(l.id);
+                }
+                const cKey = `${l.day}-${l.periodId}-${l.classId}`;
+                if (!classMap.has(cKey)) classMap.set(cKey, []);
+                classMap.get(cKey).push(l.id);
 
-        /* ==========================================
-           COMPONENTS
-           ========================================== */
-           
-        // --- TimetableCell.tsx ---
-        const TimetableCell: React.FC<any> = ({ 
-            lesson, type, label, onClick, onCopy, onToggleLock, onDragStart, onDragOver, onDrop, isStamping, isConflicting, isDisabled, disabledReason
-        }) => {
-            if (type === 'break' || type === 'event') {
-                return (
-                <div className="h-full w-full flex items-center justify-center bg-gray-50 text-gray-500 text-[10px] font-bold border-b border-r border-gray-200 uppercase tracking-tighter">
-                    {label}
-                </div>
+                const mask = isClassSlotAvailable(l.classId, l.day, l.periodId);
+                if (!mask.available) {
+                    list.push({
+                        type: 'Mask',
+                        name: `${l.classId} 班違規 (${mask.reason})`,
+                        day: l.day,
+                        periodId: l.periodId,
+                        lessonIds: [l.id]
+                    });
+                }
+            });
+
+            teacherMap.forEach((ids, key) => {
+                if (ids.length > 1) {
+                    const parts = key.split('-');
+                    const name = parts.pop();
+                    const period = parseInt(parts.pop() || '0');
+                    const day = parts.join('-');
+                    list.push({ type: 'Teacher', name: `${name} 老師衝堂`, day, periodId: period, lessonIds: Array.from(new Set(ids)) });
+                }
+            });
+
+            roomMap.forEach((ids, key) => {
+                if (ids.length > 1) {
+                    const parts = key.split('-');
+                    const name = parts.pop();
+                    const period = parseInt(parts.pop() || '0');
+                    const day = parts.join('-');
+                    list.push({ type: 'Room', name: `${name} 場地重疊`, day, periodId: period, lessonIds: Array.from(new Set(ids)) });
+                }
+            });
+
+            classMap.forEach((ids, key) => {
+                if (ids.length > 1) {
+                    const parts = key.split('-');
+                    const cls = parts.pop();
+                    const period = parseInt(parts.pop() || '0');
+                    const day = parts.join('-');
+                    list.push({ type: 'Class', name: `${cls} 班同節重複排課`, day, periodId: period, lessonIds: Array.from(new Set(ids)) });
+                }
+            });
+
+            return list;
+        }
+
+        // 智慧化解衝堂演算法
+        function resolveAllConflicts(lessons, assignments, rooms) {
+            let workingLessons = JSON.parse(JSON.stringify(lessons));
+            let resolvedCount = 0;
+            let iterations = 0;
+
+            while (iterations < 20) {
+                iterations++;
+                const curConflicts = findAllConflicts(workingLessons);
+                if (curConflicts.length === 0) break;
+
+                let movableConflictFound = false;
+
+                for (const conflict of curConflicts) {
+                    const movableLesson = workingLessons.find(l => conflict.lessonIds.includes(l.id) && !l.isLocked);
+                    if (!movableLesson) continue;
+
+                    let foundSlot = false;
+                    for (const day of DAYS) {
+                        for (let p = 1; p <= 6; p++) {
+                            if (!isClassSlotAvailable(movableLesson.classId, day, p).available) continue;
+                            const classOccupied = workingLessons.some(l => l.id !== movableLesson.id && l.classId === movableLesson.classId && l.day === day && l.periodId === p);
+                            if (classOccupied) continue;
+
+                            const teachers = movableLesson.teacher.split(',').map(t => t.trim());
+                            const teacherBusy = workingLessons.some(l => l.id !== movableLesson.id && l.day === day && l.periodId === p && l.teacher.split(',').map(t => t.trim()).some(t => teachers.includes(t)));
+                            if (teacherBusy) continue;
+
+                            if (movableLesson.room) {
+                                const roomBusy = workingLessons.some(l => l.id !== movableLesson.id && l.day === day && l.periodId === p && l.room === movableLesson.room);
+                                if (roomBusy) continue;
+                            }
+
+                            if (movableLesson.isDouble) {
+                                const partner = getDoublePeriodPartner(p);
+                                if (!partner || !isClassSlotAvailable(movableLesson.classId, day, partner).available) continue;
+                                const pClassOccupied = workingLessons.some(l => l.id !== movableLesson.id && l.classId === movableLesson.classId && l.day === day && l.periodId === partner);
+                                if (pClassOccupied) continue;
+                            }
+
+                            // 執行調動
+                            movableLesson.day = day;
+                            movableLesson.periodId = p;
+                            resolvedCount++;
+                            foundSlot = true;
+                            movableConflictFound = true;
+                            break;
+                        }
+                        if (foundSlot) break;
+                    }
+                }
+                if (!movableConflictFound) break;
+            }
+
+            const remaining = findAllConflicts(workingLessons);
+            return { resolvedLessons: workingLessons, resolvedCount, remainingConflicts: remaining };
+        }
+
+        // 校正連堂配對
+        function validateDoublePeriods(lessons) {
+            return lessons.map(l => {
+                if (!l.isDouble) return l;
+                const partner = getDoublePeriodPartner(l.periodId);
+                const hasPartner = partner && lessons.some(other => 
+                    other.classId === l.classId && other.day === l.day && other.periodId === partner && other.subject === l.subject
                 );
+                return { ...l, isDouble: !!hasPartner };
+            });
+        }
+
+        /* ==========================================
+           組件：單元格 (TimetableCell)
+           ========================================== */
+        function TimetableCell(props) {
+            const { lesson, type, label, onClick, onCopy, onToggleLock, onDragStart, onDragOver, onDrop, isStamping, isConflicting, isDisabled, disabledReason } = props;
+
+            if (type === 'break' || type === 'event') {
+                return h('div', { className: 'h-full w-full flex items-center justify-center bg-gray-50 text-gray-500 text-[10px] font-bold border-b border-r border-gray-200 uppercase tracking-tighter' }, label);
             }
 
             if (isDisabled) {
-                return (
-                <div 
-                    className="h-full w-full p-2 flex flex-col items-center justify-center text-center border-b border-r border-gray-200 min-h-[85px] bg-gray-100/70 select-none cursor-not-allowed group relative"
-                    title={disabledReason ? `【遮罩禁排】${disabledReason}` : '此時段不排課'}
-                >
-                    <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,#f3f4f6,#f3f4f6_10px,#e5e7eb_10px,#e5e7eb_20px)] opacity-60"></div>
-                    <div className="relative z-10 flex flex-col items-center justify-center px-1">
-                    <span className="text-[11px] font-bold text-gray-400 flex items-center gap-1">
-                        <span className="text-xs">🚫</span>
-                        <span className="truncate max-w-[85px]">{disabledReason || '禁排時段'}</span>
-                    </span>
-                    </div>
-                </div>
-                );
+                return h('div', {
+                    className: 'h-full w-full p-2 flex flex-col items-center justify-center text-center border-b border-r border-gray-200 min-h-[85px] bg-gray-100/70 select-none cursor-not-allowed group relative',
+                    title: disabledReason ? `【遮罩禁排】${disabledReason}` : '此時段不排課'
+                }, [
+                    h('div', { key: 'bg', className: 'absolute inset-0 bg-[repeating-linear-gradient(45deg,#f3f4f6,#f3f4f6_10px,#e5e7eb_10px,#e5e7eb_20px)] opacity-60' }),
+                    h('div', { key: 'content', className: 'relative z-10 flex flex-col items-center justify-center px-1' }, [
+                        h('span', { className: 'text-[11px] font-bold text-gray-400 flex items-center gap-1' }, [
+                            h('span', { className: 'text-xs' }, '🚫'),
+                            h('span', { className: 'truncate max-w-[85px]' }, disabledReason || '禁排時段')
+                        ])
+                    ])
+                ]);
             }
 
-            const isDouble = lesson?.isDouble;
-
-            return (
-                <div 
-                onClick={onClick}
-                draggable={!!lesson && !isStamping && !lesson.isLocked}
-                onDragStart={onDragStart}
-                onDragOver={onDragOver}
-                onDrop={onDrop}
-                className={`h-full w-full p-2 flex flex-col items-center justify-center text-center cursor-pointer transition-all border-b border-r border-gray-200 min-h-[85px] relative group ${
+            return h('div', {
+                onClick,
+                draggable: !!lesson && !isStamping && !lesson.isLocked,
+                onDragStart,
+                onDragOver,
+                onDrop,
+                className: `h-full w-full p-2 flex flex-col items-center justify-center text-center cursor-pointer transition-all border-b border-r border-gray-200 min-h-[85px] relative group ${
                     lesson ? `${lesson.color} shadow-sm active:scale-95 active:opacity-50` : 'hover:bg-indigo-50/50'
-                } ${isStamping ? 'hover:ring-4 hover:ring-indigo-400 hover:ring-inset' : ''} ${lesson?.isLocked ? 'ring-2 ring-amber-400/50' : ''} ${isConflicting ? 'ring-2 ring-red-500 ring-offset-2 animate-pulse !bg-red-50 !border-red-500' : ''}`}
-                >
-                {lesson ? (
-                    <>
-                    {isConflicting && (
-                        <div className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow z-20" title="衝堂警告">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        </div>
-                    )}
-                    <div className="flex items-center gap-1 flex-wrap justify-center">
-                        {lesson.isLocked && <span className="inline-block text-xs" title="已鎖定 (無法拖拉)">🔒</span>}
-                        {isDouble && (
-                        <span className="px-1 py-0.2 bg-indigo-600 text-white text-[8px] font-black rounded tracking-tighter" title="連堂課 (雙節成對)">
-                            🔗連堂
-                        </span>
-                        )}
-                        <span className="text-sm font-black text-gray-800 leading-tight">
-                        {lesson.subject}
-                        </span>
-                    </div>
-                    <span className="text-[10px] text-gray-600 mt-1 font-bold">{lesson.teacher}</span>
-                    {lesson.room && (
-                        <span className="text-[9px] text-gray-500/80 mt-0.5 font-medium">📍{lesson.room}</span>
-                    )}
-                    
-                    <div className="absolute top-1 right-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                        {!isStamping && onToggleLock && (
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); onToggleLock(e); }}
-                            className={`bg-white/80 hover:bg-white p-1 rounded-md shadow-sm border ${lesson.isLocked ? 'text-amber-500 border-amber-200' : 'text-gray-400 border-gray-200'}`}
-                            title={lesson.isLocked ? '解除鎖定' : '鎖定此課'}
-                        >
-                            {lesson.isLocked ? '🔓' : '🔒'}
-                        </button>
-                        )}
-                        {!isStamping && onCopy && !lesson.isLocked && (
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); onCopy(e); }}
-                            className="bg-white/80 hover:bg-white text-indigo-600 p-1 rounded-md shadow-sm border border-indigo-100"
-                            title="複製"
-                        >
-                            📋
-                        </button>
-                        )}
-                    </div>
-                    </>
-                ) : (
-                    <span className="text-indigo-200 text-lg font-black opacity-0 group-hover:opacity-100 transition-opacity">
-                    +
-                    </span>
-                )}
-                </div>
-            );
-        };
+                } ${isStamping ? 'hover:ring-4 hover:ring-indigo-400 hover:ring-inset' : ''} ${lesson && lesson.isLocked ? 'ring-2 ring-amber-400/50' : ''} ${isConflicting ? 'ring-2 ring-red-500 ring-offset-2 animate-pulse !bg-red-50 !border-red-500' : ''}`
+            }, lesson ? [
+                isConflicting && h('div', { key: 'conflict-badge', className: 'absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow z-20', title: '衝堂警告' }, '⚠️'),
+                h('div', { key: 'title-row', className: 'flex items-center gap-1 flex-wrap justify-center' }, [
+                    lesson.isLocked && h('span', { key: 'lock', className: 'inline-block text-xs', title: '已鎖定' }, '🔒'),
+                    lesson.isDouble && h('span', { key: 'double', className: 'px-1 py-0.2 bg-indigo-600 text-white text-[8px] font-black rounded tracking-tighter' }, '🔗連堂'),
+                    h('span', { key: 'subj', className: 'text-sm font-black text-gray-800 leading-tight' }, lesson.subject)
+                ]),
+                h('span', { key: 'teacher', className: 'text-[10px] text-gray-600 mt-1 font-bold' }, lesson.teacher),
+                lesson.room && h('span', { key: 'room', className: 'text-[9px] text-gray-500/80 mt-0.5 font-medium' }, `📍${lesson.room}`),
+                h('div', { key: 'actions', className: 'absolute top-1 right-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity z-10' }, [
+                    !isStamping && onToggleLock && h('button', {
+                        key: 'lock-btn',
+                        onClick: (e) => { e.stopPropagation(); onToggleLock(e); },
+                        className: `bg-white/80 hover:bg-white p-1 rounded-md shadow-sm border ${lesson.isLocked ? 'text-amber-500 border-amber-200' : 'text-gray-400 border-gray-200'}`,
+                        title: lesson.isLocked ? '解除鎖定' : '鎖定此課'
+                    }, lesson.isLocked ? '🔒' : '🔓'),
+                    !isStamping && onCopy && !lesson.isLocked && h('button', {
+                        key: 'copy-btn',
+                        onClick: (e) => { e.stopPropagation(); onCopy(e); },
+                        className: 'bg-white/80 hover:bg-white text-indigo-600 p-1 rounded-md shadow-sm border border-indigo-100',
+                        title: '複製'
+                    }, '📋')
+                ])
+            ] : [
+                h('span', { key: 'placeholder', className: 'text-indigo-200 text-lg font-black opacity-0 group-hover:opacity-100 transition-opacity' }, '+')
+            ]);
+        }
 
-        // --- TimetableGrid.tsx ---
-        const TimetableGrid: React.FC<any> = ({ 
-            lessons, title, subtitle, onCellClick, onMoveLesson, onCopyLesson, onToggleLock, isStampMode, currentClassId, conflictingLessonIds = new Set()
-        }) => {
-            const handleDragStart = (e: React.DragEvent, lessonId: string) => {
-                e.dataTransfer.setData('lessonId', lessonId);
-            };
-            const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
-            const handleDrop = (e: React.DragEvent, day: DayOfWeek, periodId: number) => {
-                e.preventDefault();
-                const sourceId = e.dataTransfer.getData('lessonId');
-                if (sourceId && currentClassId) {
-                onMoveLesson(sourceId, day, periodId, currentClassId);
-                }
-            };
+        /* ==========================================
+           組件：側邊導覽欄 (Sidebar)
+           ========================================== */
+        function Sidebar({ currentView, currentFilter, teachers, rooms, onViewChange }) {
+            let content;
+            if (currentView === 'Class') {
+                content = h('section', { className: 'animate-in slide-in-from-left duration-300' }, [
+                    h('h3', { className: 'text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 px-2' }, '選擇班級 Select Class'),
+                    h('div', { className: 'grid grid-cols-2 gap-2' }, CLASSES.map(cls => 
+                        h('button', {
+                            key: cls,
+                            onClick: () => onViewChange('Class', cls),
+                            className: `px-3 py-4 text-sm rounded-2xl border-2 transition-all font-black ${currentFilter === cls ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-gray-50 text-gray-500 hover:border-gray-200'}`
+                        }, `${cls} 班`)
+                    ))
+                ]);
+            } else if (currentView === 'Teacher') {
+                content = h('section', { className: 'animate-in slide-in-from-left duration-300' }, [
+                    h('h3', { className: 'text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 px-2' }, '選擇老師 Select Teacher'),
+                    h('div', { className: 'space-y-1 max-h-[calc(100vh-250px)] overflow-y-auto pr-2 custom-scrollbar' }, teachers.map(t =>
+                        h('button', {
+                            key: t,
+                            onClick: () => onViewChange('Teacher', t),
+                            className: `w-full text-left px-5 py-3.5 text-sm rounded-2xl transition-all font-bold mb-1 ${currentFilter === t ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-gray-500 hover:bg-gray-50 border border-transparent hover:border-gray-100'}`
+                        }, `👤 ${t} 老師`)
+                    ))
+                ]);
+            } else if (currentView === 'Room') {
+                content = h('section', { className: 'animate-in slide-in-from-left duration-300' }, [
+                    h('h3', { className: 'text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 px-2' }, '選擇場地 Select Room'),
+                    h('div', { className: 'space-y-1 max-h-[calc(100vh-250px)] overflow-y-auto pr-2 custom-scrollbar' }, rooms.map(r =>
+                        h('button', {
+                            key: r,
+                            onClick: () => onViewChange('Room', r),
+                            className: `w-full text-left px-5 py-3.5 text-sm rounded-2xl transition-all font-bold mb-1 ${currentFilter === r ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-gray-500 hover:bg-gray-50 border border-transparent hover:border-gray-100'}`
+                        }, `🎨 ${r}`)
+                    ))
+                ]);
+            } else if (['TeacherAdmin', 'RoomAdmin'].includes(currentView)) {
+                content = h('section', { className: 'animate-in slide-in-from-left duration-300' }, [
+                    h('div', { className: 'bg-emerald-50 p-6 rounded-3xl border border-emerald-100' }, [
+                        h('h3', { className: 'text-xs font-black text-emerald-900 mb-2' }, '名單管理模式'),
+                        h('p', { className: 'text-[11px] text-emerald-700 leading-relaxed font-medium' }, '您可以在此新增或移除學校的老師與場地資源。這將同步更新排課時的選擇選單。')
+                    ])
+                ]);
+            } else {
+                content = h('div', { className: 'bg-indigo-50 p-6 rounded-3xl border border-indigo-100' }, [
+                    h('h3', { className: 'text-xs font-black text-indigo-900 mb-2' }, '系統總覽模式'),
+                    h('p', { className: 'text-[11px] text-indigo-700 leading-relaxed font-medium' }, '目前處於全校排課大表。請從上方選單切換至班級或個人課表進行詳細檢視與匯出。')
+                ]);
+            }
 
-            return (
-                <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div className="p-8 bg-gray-900 text-white flex justify-between items-center">
-                    <div>
-                    <h2 className="text-2xl font-black tracking-tight">{title}</h2>
-                    {subtitle && <p className="text-gray-400 text-sm mt-1 font-medium">{subtitle}</p>}
-                    {isStampMode && <p className="text-indigo-400 text-xs font-black mt-2 no-print">✨ 印章模式：點擊下方空格快速蓋章</p>}
-                    </div>
-                </div>
+            return h('div', { className: 'w-72 bg-white h-screen border-r border-gray-100 overflow-y-auto hidden lg:flex flex-col p-6 sticky top-0 shrink-0' }, [
+                h('div', { className: 'mb-10' }, [
+                    h('h1', { className: 'text-2xl font-black text-gray-900 tracking-tighter flex items-center' }, [
+                        h('div', { className: 'bg-indigo-600 text-white w-10 h-10 rounded-2xl flex items-center justify-center mr-3 shadow-indigo-100 shadow-xl text-lg font-black italic' }, 'JY'),
+                        '均一排課'
+                    ]),
+                    h('div', { className: 'mt-2 ml-1 px-2 py-0.5 bg-gray-100 inline-block rounded-full' }, [
+                        h('p', { className: 'text-[9px] text-gray-500 font-black uppercase tracking-[0.1em]' }, 'ADMIN DASHBOARD')
+                    ])
+                ]),
+                h('div', { className: 'flex-1' }, content),
+                h('div', { className: 'mt-8 pt-8 border-t border-gray-50' }, [
+                    h('div', { className: `p-5 rounded-3xl shadow-xl shadow-gray-200 transition-colors ${currentView === 'Room' ? 'bg-emerald-900' : 'bg-gray-900'} text-white` }, [
+                        h('p', { className: 'text-[10px] text-gray-400 uppercase font-black tracking-widest' }, '目前檢視內容'),
+                        h('p', { className: 'text-sm font-black mt-2 text-indigo-300' }, 
+                            currentView === 'Master' ? '全校總表' : 
+                            currentView === 'Conflict' ? '衝堂檢查' : 
+                            currentView === 'TeacherAdmin' ? '管理老師' :
+                            currentView === 'RoomAdmin' ? '管理場地' :
+                            `${currentFilter} ${currentView === 'Class' ? '班級' : currentView === 'Teacher' ? '老師' : '教室'}`
+                        )
+                    ])
+                ])
+            ]);
+        }
 
-                <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full border-collapse table-fixed min-w-[800px]">
-                    <thead>
-                        <tr className="bg-gray-50">
-                        <th className="w-24 p-4 border-b border-r border-gray-200 text-[10px] font-black text-gray-400 uppercase tracking-widest">時間節次</th>
-                        {DAYS.map(day => <th key={day} className="p-4 border-b border-r border-gray-200 text-sm font-black text-gray-700 uppercase">{day}</th>)}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {TIME_SLOTS.map(slot => (
-                        <tr key={slot.id} className="group hover:bg-gray-50/30 transition-colors">
-                            <td className="p-3 border-b border-r border-gray-100 bg-white text-center">
-                            <div className="text-xs font-black text-gray-800">{slot.label}</div>
-                            <div className="text-[10px] text-gray-400 mt-0.5 font-mono">{slot.time}</div>
-                            </td>
-                            {DAYS.map(day => {
-                            const lesson = lessons.find(l => l.day === day && l.periodId === slot.id);
-                            const slotStatus = currentClassId && slot.type === 'class' ? isClassSlotAvailable(currentClassId, day, slot.id) : null;
-                            const isSlotDisabled = slotStatus ? !slotStatus.available : (slot.type === 'class' && slot.id === 7);
-                            const disabledReason = slotStatus?.reason || (slot.id === 7 ? '第7節全校不排課' : undefined);
-
-                            return (
-                                <td key={`${day}-${slot.id}`} className="p-0">
-                                <TimetableCell 
-                                    lesson={lesson} 
-                                    type={slot.type} 
-                                    isStamping={isStampMode}
-                                    isConflicting={lesson ? conflictingLessonIds.has(lesson.id) : false}
-                                    isDisabled={isSlotDisabled}
-                                    disabledReason={disabledReason}
-                                    label={slot.type !== 'class' ? slot.label : undefined}
-                                    onClick={() => !isSlotDisabled && slot.type === 'class' && onCellClick?.(day, slot.id)}
-                                    onCopy={() => lesson && onCopyLesson?.(lesson)}
-                                    onToggleLock={() => lesson && onToggleLock?.(lesson)}
-                                    onDragStart={(e) => lesson && handleDragStart(e, lesson.id)}
-                                    onDragOver={handleDragOver}
-                                    onDrop={(e) => !isSlotDisabled && slot.type === 'class' && handleDrop(e, day, slot.id)}
-                                />
-                                </td>
-                            );
-                            })}
-                        </tr>
-                        ))}
-                    </tbody>
-                    </table>
-                </div>
-                </div>
-            );
-        };
-
-        // --- MasterMatrix.tsx ---
-        const MasterMatrix: React.FC<any> = ({ 
-            lessons, onCellClick, onMoveLesson, onCopyLesson, onToggleLock, onLockAll, onUnlockAll, onClearAll, isStampMode, conflictingLessonIds = new Set(), onAutoResolve, conflictCount = 0
-        }) => {
+        /* ==========================================
+           組件：全校大課表矩陣 (MasterMatrix)
+           ========================================== */
+        function MasterMatrix({ lessons, onCellClick, onMoveLesson, onCopyLesson, onToggleLock, onLockAll, onUnlockAll, onClearAll, isStampMode, conflictingLessonIds = new Set(), onAutoResolve, conflictCount = 0 }) {
             const [confirmStep, setConfirmStep] = useState(0);
+
             useEffect(() => {
                 if (confirmStep === 1) {
-                const timer = setTimeout(() => setConfirmStep(0), 3000);
-                return () => clearTimeout(timer);
+                    const timer = setTimeout(() => setConfirmStep(0), 3000);
+                    return () => clearTimeout(timer);
                 }
             }, [confirmStep]);
 
-            const handleDragStart = (e: React.DragEvent, lessonId: string) => { e.dataTransfer.setData('lessonId', lessonId); };
-            const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
-            const handleDrop = (e: React.DragEvent, day: DayOfWeek, periodId: number, classId: string) => {
+            const handleDragStart = (e, lessonId) => e.dataTransfer.setData('lessonId', lessonId);
+            const handleDragOver = (e) => e.preventDefault();
+            const handleDrop = (e, day, periodId, classId) => {
                 e.preventDefault();
                 const sourceId = e.dataTransfer.getData('lessonId');
                 if (sourceId) onMoveLesson(sourceId, day, periodId, classId);
             };
 
-            const handleClear = () => {
-                if (confirmStep === 0) setConfirmStep(1);
-                else { onClearAll(); setConfirmStep(0); }
+            return h('div', { className: 'bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-500' }, [
+                h('div', { className: 'p-8 bg-indigo-900 text-white flex justify-between items-center' }, [
+                    h('div', null, [
+                        h('h2', { className: 'text-2xl font-black tracking-tight' }, '全校大課表 (Master Schedule)'),
+                        h('div', { className: 'flex items-center gap-2 mt-1' }, [
+                            h('span', { className: 'px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-full text-[10px] font-black' }, '🛡️ 班級作息遮罩已啟用'),
+                            h('p', { className: 'text-indigo-300 text-xs font-medium' }, isStampMode ? '✨ 印章模式已啟用：點擊任何可用空格即可蓋上課程' : '💡 提示：按住課程可拖拽調課，點擊 📋 可複製課程；🚫 為年級放學禁排時段')
+                        ])
+                    ]),
+                    h('div', { className: 'flex gap-3 items-center' }, [
+                        conflictCount > 0 && onAutoResolve && h('button', {
+                            onClick: onAutoResolve,
+                            className: 'px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-red-500 to-amber-500 text-white shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5 no-print'
+                        }, [
+                            h('span', null, '⚡'),
+                            h('span', null, `消除衝堂 (${conflictCount})`)
+                        ]),
+                        h('button', { onClick: onLockAll, className: 'px-4 py-2 rounded-xl text-xs font-bold bg-indigo-800/80 hover:bg-indigo-700 transition-colors border border-indigo-700/50 flex items-center gap-2 no-print' }, '全部鎖定 🔒'),
+                        h('button', { onClick: onUnlockAll, className: 'px-4 py-2 rounded-xl text-xs font-bold bg-indigo-800/80 hover:bg-indigo-700 transition-colors border border-indigo-700/50 flex items-center gap-2 no-print' }, '全部解鎖 🔓'),
+                        h('button', {
+                            onClick: () => { if (confirmStep === 0) setConfirmStep(1); else { onClearAll(); setConfirmStep(0); } },
+                            className: `px-5 py-2.5 rounded-xl text-xs font-black shadow-lg transition-all flex items-center gap-2 group active:scale-95 no-print ${confirmStep === 1 ? 'bg-amber-500 hover:bg-amber-600 animate-pulse' : 'bg-red-500 hover:bg-red-600'}`
+                        }, confirmStep === 1 ? '確認清空未鎖定？' : '清空未鎖定課程')
+                    ])
+                ]),
+                h('div', { className: 'overflow-x-auto custom-scrollbar' }, [
+                    h('table', { className: 'w-full border-collapse border-spacing-0' }, [
+                        h('thead', null, [
+                            h('tr', { className: 'bg-gray-50' }, [
+                                h('th', { className: 'sticky left-0 z-30 bg-gray-50 w-24 p-4 border-b border-r border-gray-200 text-[10px] font-black text-gray-400 uppercase tracking-widest' }, '節次 / 班級'),
+                                ...CLASSES.map(cls => h('th', { key: cls, className: 'p-4 border-b border-r border-gray-200 text-sm font-black text-gray-800 bg-gray-50/80' }, `${cls} 班`))
+                            ])
+                        ]),
+                        h('tbody', null, DAYS.map(day => [
+                            h('tr', { key: `day-header-${day}`, className: 'bg-indigo-50/30' }, [
+                                h('td', { colSpan: CLASSES.length + 1, className: 'p-3 border-b border-gray-200 text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] text-center' }, `--- ${day} ---`)
+                            ]),
+                            ...TIME_SLOTS.filter(s => s.type === 'class').map(slot => 
+                                h('tr', { key: `${day}-${slot.id}`, className: 'hover:bg-gray-50/50 transition-colors' }, [
+                                    h('td', { className: 'sticky left-0 z-20 bg-white p-3 border-b border-r border-gray-100 text-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]' }, [
+                                        h('div', { className: 'text-xs font-black text-gray-800' }, `第 ${slot.label} 節`),
+                                        h('div', { className: 'text-[9px] text-gray-400 font-mono mt-0.5' }, slot.time)
+                                    ]),
+                                    ...CLASSES.map(cls => {
+                                        const lesson = lessons.find(l => l.day === day && l.periodId === slot.id && l.classId === cls);
+                                        const slotStatus = isClassSlotAvailable(cls, day, slot.id);
+                                        return h('td', { key: `${day}-${slot.id}-${cls}`, className: 'p-0' }, [
+                                            h(TimetableCell, {
+                                                lesson,
+                                                type: 'class',
+                                                isStamping: isStampMode,
+                                                isConflicting: lesson ? conflictingLessonIds.has(lesson.id) : false,
+                                                isDisabled: !slotStatus.available,
+                                                disabledReason: slotStatus.reason,
+                                                onClick: () => slotStatus.available && onCellClick(day, slot.id, cls),
+                                                onCopy: () => lesson && onCopyLesson(lesson),
+                                                onToggleLock: () => lesson && onToggleLock(lesson),
+                                                onDragStart: (e) => lesson && handleDragStart(e, lesson.id),
+                                                onDragOver: handleDragOver,
+                                                onDrop: (e) => slotStatus.available && handleDrop(e, day, slot.id, cls)
+                                            })
+                                        ]);
+                                    })
+                                ])
+                            )
+                        ]))
+                    ])
+                ])
+            ]);
+        }
+
+        /* ==========================================
+           組件：單一課表視圖 (TimetableGrid)
+           ========================================== */
+        function TimetableGrid({ lessons, title, onCellClick, onMoveLesson, onCopyLesson, onToggleLock, isStampMode, currentClassId, conflictingLessonIds = new Set() }) {
+            const handleDragStart = (e, lessonId) => e.dataTransfer.setData('lessonId', lessonId);
+            const handleDragOver = (e) => e.preventDefault();
+            const handleDrop = (e, day, periodId) => {
+                e.preventDefault();
+                const sourceId = e.dataTransfer.getData('lessonId');
+                if (sourceId && currentClassId) onMoveLesson(sourceId, day, periodId, currentClassId);
             };
 
-            return (
-                <div className="bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-500">
-                <div className="p-8 bg-indigo-900 text-white flex justify-between items-center">
-                    <div>
-                    <h2 className="text-2xl font-black tracking-tight">全校大課表 (Master Schedule)</h2>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-full text-[10px] font-black">🛡️ 班級作息遮罩已啟用</span>
-                        <p className="text-indigo-300 text-xs font-medium">{isStampMode ? '✨ 印章模式已啟用' : '💡 提示：按住課程可拖拽調課，點擊 📋 可複製'}</p>
-                    </div>
-                    </div>
-                    <div className="flex gap-3 items-center">
-                    {conflictCount > 0 && onAutoResolve && (
-                        <button onClick={onAutoResolve} className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-red-500 to-amber-500 text-white shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5 no-print"><span>⚡</span><span>消除衝堂 ({conflictCount})</span></button>
-                    )}
-                    {onLockAll && <button onClick={onLockAll} className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-800/80 hover:bg-indigo-700 transition-colors border border-indigo-700/50 flex items-center gap-2 no-print">🔒 全部鎖定</button>}
-                    {onUnlockAll && <button onClick={onUnlockAll} className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-800/80 hover:bg-indigo-700 transition-colors border border-indigo-700/50 flex items-center gap-2 no-print">🔓 全部解鎖</button>}
-                    <button onClick={handleClear} className={`px-5 py-2.5 rounded-xl text-xs font-black shadow-lg transition-all flex items-center gap-2 group active:scale-95 no-print ${confirmStep === 1 ? 'bg-amber-500 hover:bg-amber-600 animate-pulse ring-4 ring-amber-500/30' : 'bg-red-500 hover:bg-red-600'}`}>{confirmStep === 1 ? '確認清空未鎖定？' : '清空未鎖定課程'}</button>
-                    </div>
-                </div>
+            return h('div', { className: 'bg-white rounded-[2.5rem] shadow-xl overflow-hidden border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-700' }, [
+                h('div', { className: 'p-8 bg-gray-900 text-white flex justify-between items-center' }, [
+                    h('div', null, [
+                        h('h2', { className: 'text-2xl font-black tracking-tight' }, title),
+                        isStampMode && h('p', { className: 'text-indigo-400 text-xs font-black mt-2 no-print' }, '✨ 印章模式：點擊下方空格快速蓋章')
+                    ])
+                ]),
+                h('div', { className: 'overflow-x-auto custom-scrollbar' }, [
+                    h('table', { className: 'w-full border-collapse table-fixed min-w-[800px]' }, [
+                        h('thead', null, [
+                            h('tr', { className: 'bg-gray-50' }, [
+                                h('th', { className: 'w-24 p-4 border-b border-r border-gray-200 text-[10px] font-black text-gray-400 uppercase tracking-widest' }, '時間節次'),
+                                ...DAYS.map(day => h('th', { key: day, className: 'p-4 border-b border-r border-gray-200 text-sm font-black text-gray-700 uppercase' }, day))
+                            ])
+                        ]),
+                        h('tbody', null, TIME_SLOTS.map(slot => 
+                            h('tr', { key: slot.id, className: 'group hover:bg-gray-50/30 transition-colors' }, [
+                                h('td', { className: 'p-3 border-b border-r border-gray-100 bg-white text-center' }, [
+                                    h('div', { className: 'text-xs font-black text-gray-800' }, slot.label),
+                                    h('div', { className: 'text-[10px] text-gray-400 mt-0.5 font-mono' }, slot.time)
+                                ]),
+                                ...DAYS.map(day => {
+                                    const lesson = lessons.find(l => l.day === day && l.periodId === slot.id);
+                                    const slotStatus = currentClassId && slot.type === 'class' ? isClassSlotAvailable(currentClassId, day, slot.id) : null;
+                                    const isSlotDisabled = slotStatus ? !slotStatus.available : (slot.type === 'class' && slot.id === 7);
+                                    const disabledReason = slotStatus ? slotStatus.reason : (slot.id === 7 ? '第7節全校不排課' : undefined);
 
-                <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full border-collapse border-spacing-0">
-                    <thead>
-                        <tr className="bg-gray-50">
-                        <th className="sticky left-0 z-30 bg-gray-50 w-24 p-4 border-b border-r border-gray-200 text-[10px] font-black text-gray-400 uppercase tracking-widest">節次 / 班級</th>
-                        {CLASSES.map(cls => <th key={cls} className="p-4 border-b border-r border-gray-200 text-sm font-black text-gray-800 bg-gray-50/80">{cls} 班</th>)}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {DAYS.map(day => (
-                        <React.Fragment key={day}>
-                            <tr className="bg-indigo-50/30">
-                            <td colSpan={CLASSES.length + 1} className="p-3 border-b border-gray-200 text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] text-center">--- {day} ---</td>
-                            </tr>
-                            {TIME_SLOTS.filter(s => s.type === 'class').map(slot => (
-                            <tr key={`${day}-${slot.id}`} className="hover:bg-gray-50/50 transition-colors">
-                                <td className="sticky left-0 z-20 bg-white p-3 border-b border-r border-gray-100 text-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                <div className="text-xs font-black text-gray-800">第 {slot.label} 節</div>
-                                <div className="text-[9px] text-gray-400 font-mono mt-0.5">{slot.time}</div>
-                                </td>
-                                {CLASSES.map(cls => {
-                                const lesson = lessons.find(l => l.day === day && l.periodId === slot.id && l.classId === cls);
-                                const slotStatus = isClassSlotAvailable(cls, day, slot.id);
-                                return (
-                                    <td key={`${day}-${slot.id}-${cls}`} className="p-0">
-                                    <TimetableCell 
-                                        lesson={lesson}
-                                        type="class"
-                                        isStamping={isStampMode}
-                                        isConflicting={lesson ? conflictingLessonIds.has(lesson.id) : false}
-                                        isDisabled={!slotStatus.available}
-                                        disabledReason={slotStatus.reason}
-                                        onClick={() => slotStatus.available && onCellClick(day, slot.id, cls)}
-                                        onCopy={() => lesson && onCopyLesson(lesson)}
-                                        onToggleLock={() => lesson && onToggleLock?.(lesson)}
-                                        onDragStart={(e) => lesson && handleDragStart(e, lesson.id)}
-                                        onDragOver={handleDragOver}
-                                        onDrop={(e) => slotStatus.available && handleDrop(e, day, slot.id, cls)}
-                                    />
-                                    </td>
-                                );
-                                })}
-                            </tr>
-                            ))}
-                        </React.Fragment>
-                        ))}
-                    </tbody>
-                    </table>
-                </div>
-                </div>
-            );
-        };
+                                    return h('td', { key: `${day}-${slot.id}`, className: 'p-0' }, [
+                                        h(TimetableCell, {
+                                            lesson,
+                                            type: slot.type,
+                                            isStamping: isStampMode,
+                                            isConflicting: lesson ? conflictingLessonIds.has(lesson.id) : false,
+                                            isDisabled: isSlotDisabled,
+                                            disabledReason,
+                                            label: slot.type !== 'class' ? slot.label : undefined,
+                                            onClick: () => !isSlotDisabled && slot.type === 'class' && onCellClick && onCellClick(day, slot.id),
+                                            onCopy: () => lesson && onCopyLesson && onCopyLesson(lesson),
+                                            onToggleLock: () => lesson && onToggleLock && onToggleLock(lesson),
+                                            onDragStart: (e) => lesson && handleDragStart(e, lesson.id),
+                                            onDragOver: handleDragOver,
+                                            onDrop: (e) => !isSlotDisabled && slot.type === 'class' && handleDrop(e, day, slot.id)
+                                        })
+                                    ]);
+                                })
+                            ])
+                        ))
+                    ])
+                ])
+            ]);
+        }
 
-        // --- Sidebar.tsx ---
-        const Sidebar: React.FC<any> = ({ currentView, currentFilter, teachers, rooms, onViewChange }) => {
-            const renderContent = () => {
-                switch (currentView) {
-                case 'Class':
-                    return (
-                    <section className="animate-in slide-in-from-left duration-300">
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 px-2">選擇班級</h3>
-                        <div className="grid grid-cols-2 gap-2">
-                        {CLASSES.map(cls => (
-                            <button key={cls} onClick={() => onViewChange('Class', cls)} className={`px-3 py-4 text-sm rounded-2xl border-2 transition-all font-black ${currentFilter === cls ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-gray-50 text-gray-500 hover:border-gray-200'}`}>{cls} 班</button>
-                        ))}
-                        </div>
-                    </section>
-                    );
-                case 'Teacher':
-                    return (
-                    <section className="animate-in slide-in-from-left duration-300">
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 px-2">選擇老師</h3>
-                        <div className="space-y-1 max-h-[calc(100vh-250px)] overflow-y-auto pr-2 custom-scrollbar">
-                        {teachers.map(t => (
-                            <button key={t} onClick={() => onViewChange('Teacher', t)} className={`w-full text-left px-5 py-3.5 text-sm rounded-2xl transition-all font-bold mb-1 ${currentFilter === t ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-gray-500 hover:bg-gray-50 border border-transparent hover:border-gray-100'}`}>👤 {t} 老師</button>
-                        ))}
-                        </div>
-                    </section>
-                    );
-                case 'Room':
-                    return (
-                    <section className="animate-in slide-in-from-left duration-300">
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 px-2">選擇場地</h3>
-                        <div className="space-y-1 max-h-[calc(100vh-250px)] overflow-y-auto pr-2 custom-scrollbar">
-                        {rooms.map(r => (
-                            <button key={r} onClick={() => onViewChange('Room', r)} className={`w-full text-left px-5 py-3.5 text-sm rounded-2xl transition-all font-bold mb-1 ${currentFilter === r ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-gray-500 hover:bg-gray-50 border border-transparent hover:border-gray-100'}`}>🎨 {r}</button>
-                        ))}
-                        </div>
-                    </section>
-                    );
-                default:
-                    return (
-                    <section className="animate-in slide-in-from-left duration-300">
-                        <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100">
-                        <h3 className="text-xs font-black text-indigo-900 mb-2">系統總覽模式</h3>
-                        <p className="text-[11px] text-indigo-700 leading-relaxed font-medium">目前處於全校排課大表。請從上方選單切換至班級或個人課表進行詳細檢視與匯出。</p>
-                        </div>
-                    </section>
-                    );
+        /* ==========================================
+           組件：師資與配課管理 (TeacherManager)
+           ========================================== */
+        function TeacherManager({ teachers, assignments, onAddTeacher, onAddBatchTeachers, onRemoveTeacher, onUpdateAssignments, lessonCounts, lessons = [], onSyncDoublePeriods }) {
+            const [newName, setNewName] = useState('');
+            const [importText, setImportText] = useState('');
+            const [mode, setMode] = useState('single');
+            const [expandedTeacher, setExpandedTeacher] = useState(null);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (newName.trim()) {
+                    onAddTeacher(newName.trim());
+                    setNewName('');
                 }
             };
 
-            return (
-                <div className="w-72 bg-white h-screen border-r border-gray-100 overflow-y-auto hidden lg:flex flex-col p-6 sticky top-0 shrink-0">
-                <div className="mb-10">
-                    <h1 className="text-2xl font-black text-gray-900 tracking-tighter flex items-center">
-                    <div className="bg-indigo-600 text-white w-10 h-10 rounded-2xl flex items-center justify-center mr-3 shadow-indigo-100 shadow-xl text-lg font-black italic">JY</div>均一排課
-                    </h1>
-                </div>
-                <div className="flex-1">{renderContent()}</div>
-                </div>
-            );
-        };
+            const handleBatchSubmit = () => {
+                const names = importText.split(/[\n,，、\s]+/).map(n => n.trim()).filter(n => n !== "" && !teachers.includes(n));
+                if (names.length > 0) {
+                    onAddBatchTeachers(names);
+                    setImportText('');
+                    setMode('single');
+                }
+            };
 
-        // --- TeacherManager.tsx ---
-        const TeacherManager: React.FC<any> = ({ teachers, assignments, onAddTeacher, onAddBatchTeachers, onRemoveTeacher, onUpdateAssignments, lessonCounts, lessons = [], onSyncDoublePeriods }) => {
-            const [newName, setNewName] = useState('');
-            const handleSubmit = (e) => { e.preventDefault(); if (newName.trim()) { onAddTeacher(newName.trim()); setNewName(''); } };
-            return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm h-fit sticky top-4">
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <h3 className="text-xl font-black text-gray-900 mb-2">新增老師</h3>
-                            <input className="w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-indigo-500 outline-none font-bold shadow-inner" value={newName} onChange={e => setNewName(e.target.value)} placeholder="輸入姓名..." required />
-                            <button type="submit" className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-xl">+ 確認新增</button>
-                        </form>
-                    </div>
-                    <div className="md:col-span-2 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="p-8 border-b border-gray-50 bg-gray-50/50"><h3 className="text-xl font-black text-gray-900">師資名單清單</h3></div>
-                        <div className="p-6">
-                            {teachers.map(name => (
-                                <div key={name} className="flex justify-between items-center p-3 border-b">
-                                    <span>{name}</span>
-                                    <button onClick={() => onRemoveTeacher(name)} className="text-red-500 hover:text-red-700">刪除</button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
+            const handleAddAssignment = (teacherName) => {
+                const current = assignments[teacherName] || [];
+                onUpdateAssignments(teacherName, [...current, { subject: '新科目', classId: CLASSES[0], sessions: 2, isDouble: false }]);
+            };
 
-        // --- RoomManager.tsx ---
-        const RoomManager: React.FC<any> = ({ rooms, onAddRoom, onRemoveRoom, lessonCounts }) => {
-            const [newName, setNewName] = useState('');
-            const handleSubmit = (e) => { e.preventDefault(); if (newName.trim()) { onAddRoom(newName.trim()); setNewName(''); } };
-            return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm h-fit sticky top-4">
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <h3 className="text-xl font-black text-gray-900 mb-2">新增場地</h3>
-                            <input className="w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-indigo-500 outline-none font-bold shadow-inner" value={newName} onChange={e => setNewName(e.target.value)} placeholder="例如：活動中心..." required />
-                            <button type="submit" className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-xl">+ 確認新增</button>
-                        </form>
-                    </div>
-                    <div className="md:col-span-2 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="p-8 border-b border-gray-50 bg-gray-50/50"><h3 className="text-xl font-black text-gray-900">場地清單</h3></div>
-                        <div className="p-6 grid grid-cols-2 gap-4">
-                            {rooms.map(name => (
-                                <div key={name} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl">
-                                    <span>{name}</span>
-                                    <button onClick={() => onRemoveRoom(name)} className="text-red-500">刪除</button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
+            const updateAssignment = (teacherName, index, field, value) => {
+                const current = [...(assignments[teacherName] || [])];
+                current[index] = { ...current[index], [field]: value };
+                onUpdateAssignments(teacherName, current);
+            };
 
-        // --- ConflictList.tsx ---
-        const ConflictList: React.FC<any> = ({ conflicts, lessons, onLessonEdit, onAutoResolve, onCleanDoublePeriods, onToggleLock }) => {
-            if (conflicts.length === 0) return <div className="p-10 text-center text-xl font-bold">目前沒有發現任何衝堂 ✅</div>;
-            return (
-                <div className="space-y-4 p-6">
-                    {conflicts.map((c, i) => (
-                        <div key={i} className="bg-red-50 border border-red-200 p-4 rounded-xl text-red-700">
-                            <strong>{c.type} 衝突: {c.name}</strong> - 於 {c.day} 第 {c.periodId} 節
-                        </div>
-                    ))}
-                </div>
-            );
-        };
+            const removeAssignment = (teacherName, index) => {
+                const current = (assignments[teacherName] || []).filter((_, i) => i !== index);
+                onUpdateAssignments(teacherName, current);
+            };
 
+            return h('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500' }, [
+                h('div', { className: 'bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm h-fit sticky top-4' }, [
+                    h('div', { className: 'flex bg-gray-100 p-1 rounded-2xl mb-6' }, [
+                        h('button', { onClick: () => setMode('single'), className: `flex-1 py-2 text-xs font-black rounded-xl transition-all ${mode === 'single' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400'}` }, '單筆新增'),
+                        h('button', { onClick: () => setMode('batch'), className: `flex-1 py-2 text-xs font-black rounded-xl transition-all ${mode === 'batch' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400'}` }, '批次匯入')
+                    ]),
+                    mode === 'single' ? h('form', { onSubmit: handleSubmit, className: 'space-y-4' }, [
+                        h('h3', { className: 'text-xl font-black text-gray-900 mb-2' }, '新增老師'),
+                        h('input', { className: 'w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-indigo-500 outline-none font-bold shadow-inner', value: newName, onChange: e => setNewName(e.target.value), placeholder: '輸入姓名...', required: true }),
+                        h('button', { type: 'submit', className: 'w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-xl flex items-center justify-center gap-2' }, '+ 確認新增')
+                    ]) : h('div', { className: 'space-y-4' }, [
+                        h('h3', { className: 'text-xl font-black text-gray-900 mb-2' }, '批次匯入名單'),
+                        h('textarea', { className: 'w-full h-40 px-5 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-indigo-500 font-bold shadow-inner resize-none text-sm', value: importText, onChange: e => setImportText(e.target.value), placeholder: '例如：王小明, 李大華...' }),
+                        h('button', { onClick: handleBatchSubmit, className: 'w-full py-4 bg-indigo-900 text-white rounded-2xl font-black hover:bg-black shadow-xl flex items-center justify-center gap-2' }, '🚀 執行批次匯入')
+                    ])
+                ]),
+                h('div', { className: 'md:col-span-2 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden' }, [
+                    h('div', { className: 'p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/50' }, [
+                        h('div', null, [
+                            h('h3', { className: 'text-xl font-black text-gray-900' }, '師資與配課管理'),
+                            h('p', { className: 'text-xs text-gray-400 font-bold mt-1' }, '勾選連堂後可隨時點擊同步，系統將自動於課表成對配對排課')
+                        ]),
+                        h('div', { className: 'flex items-center gap-3' }, [
+                            onSyncDoublePeriods && h('button', {
+                                onClick: onSyncDoublePeriods,
+                                className: 'px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-black rounded-full transition-all shadow-sm flex items-center gap-1.5 active:scale-95'
+                            }, '🔗 同步並對齊連堂'),
+                            h('span', { className: 'px-5 py-2 bg-indigo-600 rounded-full text-xs font-black text-white shadow-lg' }, `共 ${teachers.length} 位`)
+                        ])
+                    ]),
+                    h('div', { className: 'divide-y divide-gray-50 overflow-y-auto max-h-[800px] custom-scrollbar' }, teachers.map(name => {
+                        const isExpanded = expandedTeacher === name;
+                        const teacherAssignments = assignments[name] || [];
+                        const totalAssigned = teacherAssignments.reduce((sum, a) => sum + Number(a.sessions), 0);
+                        const scheduled = lessonCounts[name] || 0;
+
+                        return h('div', { key: name, className: 'flex flex-col transition-all' }, [
+                            h('div', {
+                                onClick: () => setExpandedTeacher(isExpanded ? null : name),
+                                className: `flex items-center justify-between p-6 cursor-pointer hover:bg-indigo-50/30 ${isExpanded ? 'bg-indigo-50/50' : ''}`
+                            }, [
+                                h('div', { className: 'flex items-center gap-4' }, [
+                                    h('div', { className: 'w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-black shadow-inner text-lg' }, name.charAt(0)),
+                                    h('div', null, [
+                                        h('p', { className: 'font-black text-gray-900 text-lg' }, name),
+                                        h('div', { className: 'flex items-center gap-3 mt-1' }, [
+                                            h('span', { className: 'text-[10px] font-black uppercase text-gray-400' }, `配課總額: ${totalAssigned} 節`),
+                                            h('span', { className: `text-[10px] font-black uppercase px-2 py-0.5 rounded ${scheduled < totalAssigned ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}` }, `已排課: ${scheduled} / ${totalAssigned}`)
+                                        ])
+                                    ])
+                                ]),
+                                h('div', { className: 'flex items-center gap-2' }, [
+                                    h('button', {
+                                        onClick: (e) => { e.stopPropagation(); onRemoveTeacher(name); },
+                                        className: `w-10 h-10 rounded-xl flex items-center justify-center bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-all ${scheduled > 0 ? 'opacity-20 cursor-not-allowed' : ''}`,
+                                        disabled: scheduled > 0
+                                    }, '✕'),
+                                    h('span', { className: `text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}` }, '▼')
+                                ])
+                            ]),
+                            isExpanded && h('div', { className: 'p-8 bg-gray-50/50 border-t border-gray-100 space-y-4 animate-in slide-in-from-top-4 duration-300' }, [
+                                h('div', { className: 'flex justify-between items-center mb-4' }, [
+                                    h('h4', { className: 'text-sm font-black text-indigo-900 uppercase tracking-widest' }, '分配班級與節數'),
+                                    h('button', { onClick: () => handleAddAssignment(name), className: 'px-4 py-2 bg-indigo-600 text-white text-xs font-black rounded-xl shadow-md' }, '+ 新增配課')
+                                ]),
+                                teacherAssignments.length === 0 ? h('div', { className: 'py-10 text-center border-2 border-dashed border-gray-200 rounded-3xl text-gray-400 font-bold' }, '目前尚未設定配課內容')
+                                : h('div', { className: 'space-y-3' }, teacherAssignments.map((as, idx) => {
+                                    const asCount = lessons.filter(l => l.teacher.includes(name) && l.classId === as.classId && l.subject === as.subject).length;
+                                    return h('div', { key: idx, className: 'flex flex-wrap md:flex-nowrap gap-3 items-center' }, [
+                                        h('input', { className: 'flex-1 min-w-[120px] px-4 py-3 rounded-xl bg-white border border-gray-200 font-bold text-sm', value: as.subject, onChange: e => updateAssignment(name, idx, 'subject', e.target.value), placeholder: '科目' }),
+                                        h('select', { className: 'w-28 px-3 py-3 rounded-xl bg-white border border-gray-200 font-bold text-sm', value: as.classId, onChange: e => updateAssignment(name, idx, 'classId', e.target.value) }, CLASSES.map(c => h('option', { key: c, value: c }, `${c} 班`))),
+                                        h('label', { className: 'flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-gray-200 cursor-pointer text-xs font-bold' }, [
+                                            h('input', { type: 'checkbox', checked: !!as.isDouble, onChange: e => updateAssignment(name, idx, 'isDouble', e.target.checked), className: 'w-4 h-4 text-indigo-600 rounded' }),
+                                            h('span', { className: as.isDouble ? 'text-indigo-600 font-black' : 'text-gray-400' }, as.isDouble ? '🔗 連堂' : '單節')
+                                        ]),
+                                        h('div', { className: 'flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200' }, [
+                                            h('span', { className: 'text-xs font-black text-gray-400' }, '節數:'),
+                                            h('input', { type: 'number', min: '1', max: '10', className: 'w-10 text-center font-black text-indigo-600 outline-none', value: as.sessions, onChange: e => updateAssignment(name, idx, 'sessions', parseInt(e.target.value) || 0) }),
+                                            h('span', { className: `text-xs font-bold px-2 py-0.5 rounded ${asCount >= as.sessions ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500'}` }, `已排: ${asCount}/${as.sessions}`)
+                                        ]),
+                                        h('button', { onClick: () => removeAssignment(name, idx), className: 'text-red-400 hover:text-red-600 p-2' }, '✕')
+                                    ]);
+                                }))
+                            ])
+                        ]);
+                    }))
+                ])
+            ]);
+        }
 
         /* ==========================================
-           MAIN APP COMPONENT
+           組件：場地管理 (RoomManager)
            ========================================== */
-        const App: React.FC = () => {
-            const [lessons, setLessons] = useState<Lesson[]>(INITIAL_LESSONS);
-            const [teachers, setTeachers] = useState<string[]>(STATIC_TEACHERS);
-            const [rooms, setRooms] = useState<string[]>(INITIAL_ROOMS);
-            const [assignments, setAssignments] = useState<Record<string, Assignment[]>>({});
-            const [viewMode, setViewMode] = useState<ViewMode>('Master');
-            const [viewFilter, setViewFilter] = useState<string>('all');
-            
+        function RoomManager({ rooms, onAddRoom, onRemoveRoom, lessonCounts }) {
+            const [newName, setNewName] = useState('');
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (newName.trim()) {
+                    onAddRoom(newName.trim());
+                    setNewName('');
+                }
+            };
+            return h('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500' }, [
+                h('div', { className: 'bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm h-fit sticky top-4' }, [
+                    h('form', { onSubmit: handleSubmit, className: 'space-y-4' }, [
+                        h('h3', { className: 'text-xl font-black text-gray-900 mb-2' }, '新增場地'),
+                        h('input', { className: 'w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-indigo-500 outline-none font-bold text-gray-800 shadow-inner', value: newName, onChange: e => setNewName(e.target.value), placeholder: '例如：活動中心...', required: true }),
+                        h('button', { type: 'submit', className: 'w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-xl' }, '+ 確認新增')
+                    ])
+                ]),
+                h('div', { className: 'md:col-span-2 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col' }, [
+                    h('div', { className: 'p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/50' }, [
+                        h('div', null, [
+                            h('h3', { className: 'text-xl font-black text-gray-900' }, '目前專科教室庫'),
+                            h('p', { className: 'text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1' }, 'Available Rooms')
+                        ]),
+                        h('span', { className: 'px-5 py-2 bg-indigo-600 rounded-full text-xs font-black text-white shadow-lg' }, `共 ${rooms.length} 個`)
+                    ]),
+                    h('div', { className: 'p-6 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[650px] overflow-y-auto custom-scrollbar' }, rooms.map(name => {
+                        const count = lessonCounts[name] || 0;
+                        return h('div', { key: name, className: 'flex items-center justify-between p-4 rounded-2xl border border-gray-100 hover:bg-indigo-50/30 transition-all' }, [
+                            h('div', { className: 'flex items-center gap-4' }, [
+                                h('div', { className: 'w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-black' }, '🏫'),
+                                h('div', null, [
+                                    h('p', { className: 'font-black text-gray-800' }, name),
+                                    h('span', { className: `text-[9px] px-2 py-0.5 rounded-full font-black ${count > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-400'}` }, count > 0 ? `使用中 (${count} 節)` : '無使用')
+                                ])
+                            ]),
+                            h('button', {
+                                onClick: () => onRemoveRoom(name),
+                                disabled: count > 0,
+                                className: `w-9 h-9 rounded-xl flex items-center justify-center ${count > 0 ? 'bg-gray-50 text-gray-200 cursor-not-allowed' : 'bg-red-50 text-red-500 hover:bg-red-500 hover:text-white'}`
+                            }, '✕')
+                        ]);
+                    }))
+                ])
+            ]);
+        }
+
+        /* ==========================================
+           組件：衝堂檢查與化解 (ConflictList)
+           ========================================== */
+        function ConflictList({ conflicts, lessons, onLessonEdit, onAutoResolve, onCleanDoublePeriods, onToggleLock }) {
+            if (conflicts.length === 0) {
+                return h('div', { className: 'flex flex-col items-center justify-center p-20 bg-white rounded-[2.5rem] border-2 border-dashed border-gray-100 text-center' }, [
+                    h('div', { className: 'w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center text-4xl mb-6' }, '✅'),
+                    h('h3', { className: 'text-2xl font-black text-gray-900' }, '目前沒有發現任何衝堂'),
+                    h('p', { className: 'text-gray-400 font-bold mt-2' }, '全校課表合規且無重疊衝突！各班級作息遮罩與教師時段均正常。')
+                ]);
+            }
+
+            return h('div', { className: 'space-y-6 animate-in fade-in duration-500' }, [
+                h('div', { className: 'bg-gradient-to-r from-red-500 via-rose-500 to-indigo-600 p-8 rounded-[2.5rem] text-white shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-6' }, [
+                    h('div', null, [
+                        h('div', { className: 'flex items-center gap-3' }, [
+                            h('span', { className: 'text-2xl' }, '⚠️'),
+                            h('h3', { className: 'text-xl font-black' }, `偵測到 ${conflicts.length} 處排課衝突`)
+                        ]),
+                        h('p', { className: 'text-red-100 text-xs mt-2' }, '點擊「一鍵自動消除衝堂」可自動保留鎖定課程（🔒），將衝突項目搬移至安全空時段。')
+                    ]),
+                    h('div', { className: 'flex flex-wrap gap-3' }, [
+                        onAutoResolve && h('button', {
+                            onClick: onAutoResolve,
+                            className: 'px-6 py-3.5 bg-white text-gray-900 hover:bg-yellow-300 font-black text-xs rounded-2xl shadow-xl transition-all'
+                        }, '⚡ 一鍵自動消除衝堂'),
+                        onCleanDoublePeriods && h('button', {
+                            onClick: onCleanDoublePeriods,
+                            className: 'px-5 py-3.5 bg-black/20 text-white font-bold text-xs rounded-2xl'
+                        }, '🧹 校正連堂標記')
+                    ])
+                ]),
+                h('div', { className: 'space-y-4' }, conflicts.map((conflict, idx) => 
+                    h('div', { key: idx, className: 'bg-white p-6 rounded-[2.5rem] border border-red-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6' }, [
+                        h('div', { className: 'flex items-start gap-5' }, [
+                            h('div', { className: 'w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center text-white text-xl shadow-lg' }, '⚠️'),
+                            h('div', null, [
+                                h('h4', { className: 'text-xl font-black text-gray-900' }, conflict.name),
+                                h('p', { className: 'text-sm font-bold text-gray-500 mt-1' }, `📅 週${conflict.day} 第 ${conflict.periodId} 節`)
+                            ])
+                        ]),
+                        h('div', { className: 'flex flex-wrap gap-3' }, conflict.lessonIds.map(id => {
+                            const l = lessons.find(x => x.id === id);
+                            if (!l) return null;
+                            return h('div', { key: id, className: 'relative flex flex-col' }, [
+                                h('button', {
+                                    onClick: () => onLessonEdit(l),
+                                    className: `px-5 py-4 pb-10 rounded-[1.5rem] border-2 ${l.color} text-left min-w-[170px]`
+                                }, [
+                                    h('div', { className: 'font-black text-sm' }, `${l.isLocked ? '🔒 ' : ''}${l.subject}`),
+                                    h('div', { className: 'text-xs text-gray-600 mt-1' }, `👨‍🏫 ${l.teacher}`),
+                                    h('div', { className: 'text-[11px] text-gray-500' }, `🏫 ${l.classId} 班`)
+                                ]),
+                                onToggleLock && h('button', {
+                                    onClick: (e) => { e.stopPropagation(); onToggleLock(l.id); },
+                                    className: 'absolute bottom-2.5 right-3 text-[11px] font-black px-2 py-0.5 rounded-lg bg-white/80 border border-gray-200'
+                                }, l.isLocked ? '🔒 解除' : '🔓 鎖定')
+                            ]);
+                        }))
+                    ])
+                ))
+            ]);
+        }
+
+        /* ==========================================
+           主應用程式 (App Component)
+           ========================================== */
+        function App() {
+            const [lessons, setLessons] = useState([]);
+            const [teachers, setTeachers] = useState([]);
+            const [rooms, setRooms] = useState(INITIAL_ROOMS);
+            const [assignments, setAssignments] = useState({});
+            const [viewMode, setViewMode] = useState('Master');
+            const [viewFilter, setViewFilter] = useState('all');
+
             const [isEditing, setIsEditing] = useState(false);
-            const [editingLesson, setEditingLesson] = useState<Partial<Lesson> | null>(null);
+            const [editingLesson, setEditingLesson] = useState(null);
             const [formTeacher1, setFormTeacher1] = useState('');
             const [formTeacher2, setFormTeacher2] = useState('');
-            
+
             const [isAIModalOpen, setIsAIModalOpen] = useState(false);
             const [aiPrompt, setAiPrompt] = useState('');
             const [isAILoading, setIsAILoading] = useState(false);
 
-            const [clipboard, setClipboard] = useState<Partial<Lesson> | null>(null);
-            const [isStampMode, setIsStampMode] = useState(false);
-            
-            const fileInputRef = useRef<HTMLInputElement>(null);
+            const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+            const [toast, setToast] = useState(null);
 
-            const switchMode = (mode: ViewMode) => {
+            const [clipboard, setClipboard] = useState(null);
+            const [isStampMode, setIsStampMode] = useState(false);
+            const fileInputRef = useRef(null);
+
+            const showToast = (message, type = 'info') => {
+                setToast({ message, type });
+                setTimeout(() => setToast(prev => prev && prev.message === message ? null : prev), 4500);
+            };
+
+            const switchMode = (mode) => {
                 setViewMode(mode);
-                if (mode === 'Master' || mode === 'Conflict' || mode === 'TeacherAdmin' || mode === 'RoomAdmin') {
-                setViewFilter('all');
-                } else if (mode === 'Class') setViewFilter(CLASSES[0]);
+                if (['Master', 'Conflict', 'TeacherAdmin', 'RoomAdmin'].includes(mode)) setViewFilter('all');
+                else if (mode === 'Class') setViewFilter(CLASSES[0]);
                 else if (mode === 'Teacher') setViewFilter(teachers[0] || '');
                 else if (mode === 'Room') setViewFilter(rooms[0] || '');
             };
 
             useEffect(() => {
                 if (editingLesson) {
-                const names = (editingLesson.teacher || '').split(',').map(n => n.trim()).filter(Boolean);
-                setFormTeacher1(names[0] || '');
-                setFormTeacher2(names[1] || '');
+                    const names = (editingLesson.teacher || '').split(',').map(n => n.trim()).filter(Boolean);
+                    setFormTeacher1(names[0] || '');
+                    setFormTeacher2(names[1] || '');
                 }
             }, [editingLesson]);
 
-            const conflicts = useMemo(() => {
-                const list: Conflict[] = [];
-                const teacherMap = new Map<string, string[]>();
-                const roomMap = new Map<string, string[]>();
-                
-                lessons.forEach(l => {
-                const names = l.teacher.split(',').map(n => n.trim()).filter(Boolean);
-                names.forEach(name => {
-                    const key = `${l.day}-${l.periodId}-${name}`;
-                    if (!teacherMap.has(key)) teacherMap.set(key, []);
-                    teacherMap.get(key)!.push(l.id);
-                });
-                if (l.room) {
-                    const key = `${l.day}-${l.periodId}-${l.room}`;
-                    if (!roomMap.has(key)) roomMap.set(key, []);
-                    roomMap.get(key)!.push(l.id);
-                }
-                });
-
-                teacherMap.forEach((ids, key) => {
-                if (ids.length > 1) {
-                    const parts = key.split('-');
-                    const name = parts.pop(); const period = parts.pop(); const day = parts.join('-');
-                    list.push({ type: 'Teacher', name: name || '', day: day as DayOfWeek, periodId: parseInt(period || '0'), lessonIds: Array.from(new Set(ids)) });
-                }
-                });
-
-                roomMap.forEach((ids, key) => {
-                if (ids.length > 1) {
-                    const parts = key.split('-');
-                    const name = parts.pop(); const period = parts.pop(); const day = parts.join('-');
-                    list.push({ type: 'Room', name: name || '', day: day as DayOfWeek, periodId: parseInt(period || '0'), lessonIds: Array.from(new Set(ids)) });
-                }
-                });
-
-                return list;
-            }, [lessons]);
+            const conflicts = useMemo(() => findAllConflicts(lessons), [lessons]);
+            const conflictingLessonIds = useMemo(() => new Set(conflicts.flatMap(c => c.lessonIds)), [conflicts]);
 
             const teacherLessonCounts = useMemo(() => {
-                const counts: Record<string, number> = {};
+                const counts = {};
                 lessons.forEach(l => {
-                l.teacher.split(',').forEach(n => {
-                    const name = n.trim();
-                    if (name) counts[name] = (counts[name] || 0) + 1;
-                });
+                    (l.teacher || '').split(',').forEach(n => {
+                        const name = n.trim();
+                        if (name) counts[name] = (counts[name] || 0) + 1;
+                    });
                 });
                 return counts;
             }, [lessons]);
 
             const roomLessonCounts = useMemo(() => {
-                const counts: Record<string, number> = {};
+                const counts = {};
                 lessons.forEach(l => {
-                if (l.room) {
-                    counts[l.room] = (counts[l.room] || 0) + 1;
-                }
+                    if (l.room) counts[l.room] = (counts[l.room] || 0) + 1;
                 });
                 return counts;
             }, [lessons]);
 
             const filteredLessons = useMemo(() => {
                 switch (viewMode) {
-                case 'Class': return lessons.filter(l => l.classId === viewFilter);
-                case 'Teacher': return lessons.filter(l => l.teacher.split(',').map(n => n.trim()).includes(viewFilter));
-                case 'Room': return lessons.filter(l => l.room === viewFilter);
-                case 'Conflict': return lessons.filter(l => new Set(conflicts.flatMap(c => c.lessonIds)).has(l.id));
-                default: return lessons;
+                    case 'Class': return lessons.filter(l => l.classId === viewFilter);
+                    case 'Teacher': return lessons.filter(l => l.teacher.split(',').map(n => n.trim()).includes(viewFilter));
+                    case 'Room': return lessons.filter(l => l.room === viewFilter);
+                    case 'Conflict': return lessons.filter(l => conflictingLessonIds.has(l.id));
+                    default: return lessons;
                 }
-            }, [lessons, viewMode, viewFilter, conflicts]);
+            }, [lessons, viewMode, viewFilter, conflictingLessonIds]);
 
-            const handleMoveLesson = (sourceId: string, targetDay: DayOfWeek, targetPeriodId: number, targetClassId: string) => {
+            // 一鍵自動化解衝堂
+            const handleAutoResolveConflicts = () => {
+                const { resolvedLessons, resolvedCount, remainingConflicts } = resolveAllConflicts(lessons, assignments, rooms);
+                setLessons(resolvedLessons);
+                if (remainingConflicts.length === 0) {
+                    showToast(resolvedCount > 0 ? `⚡ 成功自動化解 ${resolvedCount} 處衝堂！全校課表達成 100% 零衝突！` : '課表目前已處於最佳狀態，無任何衝堂。', 'success');
+                } else {
+                    showToast(`⚡ 已化解 ${resolvedCount} 處衝堂，剩餘 ${remainingConflicts.length} 處源自已鎖定課程相互重疊，建議解除鎖定後重試。`, 'info');
+                }
+            };
+
+            const handleCleanDoublePeriods = () => {
+                const cleaned = validateDoublePeriods(lessons);
+                setLessons(cleaned);
+                showToast('🔗 已重新校準並對齊連堂課程標記！', 'success');
+            };
+
+            // 學級升級邏輯
+            const handleAcademicYearUpgrade = () => {
+                const classMap = { '101': '201', '201': '301', '301': '401', '401': '501', '501': '601', '601': null };
+                const classToTutor = {};
+                Object.entries(assignments).forEach(([teacherName, tAssignments]) => {
+                    tAssignments.forEach(as => {
+                        if (as.subject === '晨圈') classToTutor[as.classId] = teacherName;
+                    });
+                });
+
+                const nextLessons = lessons.map(l => {
+                    const lTeachers = l.teacher.split(',').map(n => n.trim());
+                    const curTutor = classToTutor[l.classId];
+                    if (curTutor && lTeachers.includes(curTutor)) {
+                        let incomingTutor = '';
+                        Object.entries(classMap).forEach(([prev, next]) => {
+                            if (next === l.classId) incomingTutor = classToTutor[prev];
+                        });
+                        if (incomingTutor) return { ...l, teacher: incomingTutor };
+                    }
+                    return l;
+                });
+
+                setLessons(nextLessons);
+                setIsUpgradeModalOpen(false);
+                showToast('🎓 學級升級完成！導師已按年級遞晉！', 'success');
+            };
+
+            // 拖拉調課處理（含遮罩防護與成對連堂連動）
+            const handleMoveLesson = (sourceId, targetDay, targetPeriodId, targetClassId) => {
                 setLessons(prev => {
-                const sourceIndex = prev.findIndex(l => l.id === sourceId);
-                if (sourceIndex === -1) return prev;
-                const sourceLesson = { ...prev[sourceIndex] };
-                const actualTargetClassId = targetClassId || sourceLesson.classId;
-                const targetIndex = prev.findIndex(l => l.day === targetDay && l.periodId === targetPeriodId && l.classId === actualTargetClassId);
-                const updated = [...prev];
-                if (targetIndex !== -1) {
-                    const targetLesson = { ...prev[targetIndex] };
-                    updated[sourceIndex] = { ...targetLesson, day: sourceLesson.day, periodId: sourceLesson.periodId, classId: sourceLesson.classId };
-                    updated[targetIndex] = { ...sourceLesson, day: targetDay, periodId: targetPeriodId, classId: actualTargetClassId };
-                } else {
-                    updated[sourceIndex] = { ...sourceLesson, day: targetDay, periodId: targetPeriodId, classId: actualTargetClassId };
-                }
-                return updated;
-                });
-            };
+                    const srcIndex = prev.findIndex(l => l.id === sourceId);
+                    if (srcIndex === -1) return prev;
+                    const srcLesson = { ...prev[srcIndex] };
+                    if (srcLesson.isLocked) return prev;
 
-            const handleClearAllLessons = () => {
-                setLessons([]);
-                setIsStampMode(false);
-                setClipboard(null);
-            };
+                    const finalClassId = targetClassId || srcLesson.classId;
+                    const maskCheck = isClassSlotAvailable(finalClassId, targetDay, targetPeriodId);
+                    if (!maskCheck.available) {
+                        showToast(`無法移動：目標時段為【${maskCheck.reason}】，禁止排課！`, 'error');
+                        return prev;
+                    }
 
-            const runAIScheduling = async () => {
-                if (!aiPrompt.trim()) return;
-                setIsAILoading(true);
-                try {
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                const response = await ai.models.generateContent({
-                    model: 'gemini-3-pro-preview',
-                    contents: `你是一位資深教務排課專家。\n目前的教師與配課清單（JSON）：${JSON.stringify(assignments)}\n這份清單定義了哪位老師要在哪個班級上幾節課。\n\n使用者特殊要求：${aiPrompt}\n\n規則：\n1. 嚴格遵守配課清單中的班級、科目與節數。\n2. 不可有教師衝堂（同一教師不可在同一節出現在不同班級）。\n3. 輸出格式必須是 Lesson 陣列的 JSON。\n4. 每節課只能安排一個老師（除非有協同老師）。\n\n目前已排定的課表基礎（供參考）：${JSON.stringify(lessons)}`,
-                    config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.ARRAY,
-                        items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            id: { type: Type.STRING }, classId: { type: Type.STRING },
-                            day: { type: Type.STRING }, periodId: { type: Type.INTEGER },
-                            subject: { type: Type.STRING }, teacher: { type: Type.STRING },
-                            room: { type: Type.STRING }, color: { type: Type.STRING }
-                        },
-                        required: ["id", "classId", "day", "periodId", "subject", "teacher"]
+                    if (srcLesson.isDouble) {
+                        const srcPartner = getDoublePeriodPartner(srcLesson.periodId);
+                        const targetPartner = getDoublePeriodPartner(targetPeriodId);
+                        if (!targetPartner) {
+                            showToast('無法移動：連堂課程只能移動至成對時段（1-2節、3-4節、5-6節）！', 'info');
+                            return prev;
                         }
+                        const partnerMask = isClassSlotAvailable(finalClassId, targetDay, targetPartner);
+                        if (!partnerMask.available) {
+                            showToast(`無法移動：連堂配對的第 ${targetPartner} 節為【${partnerMask.reason}】！`, 'error');
+                            return prev;
+                        }
+                        const pIdx = prev.findIndex(l => l.classId === srcLesson.classId && l.day === srcLesson.day && l.periodId === srcPartner && l.subject === srcLesson.subject);
+                        const updated = [...prev];
+                        updated[srcIndex] = { ...srcLesson, day: targetDay, periodId: targetPeriodId, classId: finalClassId };
+                        if (pIdx !== -1 && !prev[pIdx].isLocked) {
+                            updated[pIdx] = { ...prev[pIdx], day: targetDay, periodId: targetPartner, classId: finalClassId };
+                        }
+                        return updated;
                     }
+
+                    const tgtIndex = prev.findIndex(l => l.day === targetDay && l.periodId === targetPeriodId && l.classId === finalClassId);
+                    if (tgtIndex !== -1 && prev[tgtIndex].isLocked) return prev;
+
+                    const updated = [...prev];
+                    if (tgtIndex !== -1) {
+                        const tgtLesson = { ...prev[tgtIndex] };
+                        const sMask = isClassSlotAvailable(tgtLesson.classId, srcLesson.day, srcLesson.periodId);
+                        if (!sMask.available) {
+                            showToast(`無法交換：交換的時段對該班級為【${sMask.reason}】！`, 'error');
+                            return prev;
+                        }
+                        updated[srcIndex] = { ...tgtLesson, day: srcLesson.day, periodId: srcLesson.periodId, classId: srcLesson.classId };
+                        updated[tgtIndex] = { ...srcLesson, day: targetDay, periodId: targetPeriodId, classId: finalClassId };
+                    } else {
+                        updated[srcIndex] = { ...srcLesson, day: targetDay, periodId: targetPeriodId, classId: finalClassId };
                     }
+                    return updated;
                 });
-                const text = response.text;
-                if (text) {
-                    const newLessons = JSON.parse(text);
-                    if (Array.isArray(newLessons)) { 
-                    setLessons(newLessons); 
-                    setIsAIModalOpen(false); 
-                    setAiPrompt(''); 
-                    }
-                }
-                } catch (e) { 
-                console.error(e);
-                alert('AI 運算失敗，請稍後再試。若是在純前端執行，請確認您已在程式碼頂部加上真實的 API_KEY。'); 
-                } finally { 
-                setIsAILoading(false); 
-                }
             };
 
-            const handleCellClick = (day: DayOfWeek, periodId: number, classId: string) => {
-                if (isStampMode && clipboard) {
-                const newLesson: Lesson = { 
-                    ...(clipboard as Lesson), 
-                    id: Math.random().toString(36).substr(2, 9), 
-                    day, 
-                    periodId, 
-                    classId 
-                };
-                setLessons(prev => [...prev.filter(l => !(l.day === day && l.periodId === periodId && l.classId === classId)), newLesson]);
-                } else {
+            const handleCellClick = (day, periodId, classId) => {
+                const mask = isClassSlotAvailable(classId, day, periodId);
+                if (!mask.available) {
+                    showToast(`此時段為【${mask.reason}】，禁止排課！`, 'error');
+                    return;
+                }
                 const existing = lessons.find(l => l.day === day && l.periodId === periodId && l.classId === classId);
-                setEditingLesson(existing ? { ...existing } : { day, periodId, classId, subject: '', teacher: '', room: '', color: 'bg-blue-100 border-blue-200' });
-                setIsEditing(true);
+                if (isStampMode && clipboard) {
+                    if (existing && existing.isLocked) return;
+                    const newLesson = { ...clipboard, id: Math.random().toString(36).substr(2, 9), day, periodId, classId, isLocked: false };
+                    setLessons(prev => [...prev.filter(l => !(l.day === day && l.periodId === periodId && l.classId === classId)), newLesson]);
+                } else {
+                    if (existing && existing.isLocked) {
+                        showToast('🔒 此課程已鎖定，請先解除鎖定再編輯。', 'info');
+                        return;
+                    }
+                    setEditingLesson(existing ? { ...existing } : { day, periodId, classId, subject: '', teacher: '', room: '', color: COLOR_OPTIONS[0].value, isLocked: false, isDouble: false });
+                    setIsEditing(true);
                 }
             };
 
             const handleSaveLesson = () => {
                 if (!editingLesson || !editingLesson.subject || !formTeacher1) return;
                 const finalTeacher = [formTeacher1, formTeacher2].filter(Boolean).join(', ');
-                const lessonToSave: Lesson = {
-                ...editingLesson as Lesson,
-                id: editingLesson.id || Math.random().toString(36).substr(2, 9),
-                teacher: finalTeacher
-                };
-
-                setLessons(prev => {
-                const filtered = prev.filter(l => !(l.day === lessonToSave.day && l.periodId === lessonToSave.periodId && l.classId === lessonToSave.classId));
-                return [...filtered, lessonToSave];
-                });
+                const lessonToSave = { ...editingLesson, id: editingLesson.id || Math.random().toString(36).substr(2, 9), teacher: finalTeacher };
+                
+                if (lessonToSave.isDouble) {
+                    const partnerPeriod = getDoublePeriodPartner(lessonToSave.periodId);
+                    if (!partnerPeriod) {
+                        showToast('此節次無法形成有效連堂（僅支援 1-2、3-4、5-6 節）！', 'info');
+                        return;
+                    }
+                    const partnerLesson = { ...lessonToSave, id: Math.random().toString(36).substr(2, 9), periodId: partnerPeriod };
+                    setLessons(prev => [
+                        ...prev.filter(l => !(l.classId === lessonToSave.classId && l.day === lessonToSave.day && (l.periodId === lessonToSave.periodId || l.periodId === partnerPeriod))),
+                        lessonToSave,
+                        partnerLesson
+                    ]);
+                } else {
+                    setLessons(prev => [
+                        ...prev.filter(l => !(l.day === lessonToSave.day && l.periodId === lessonToSave.periodId && l.classId === lessonToSave.classId)),
+                        lessonToSave
+                    ]);
+                }
                 setIsEditing(false);
                 setEditingLesson(null);
             };
@@ -821,18 +1002,7 @@
                 setEditingLesson(null);
             };
 
-            const handleExport = () => {
-                const data = { teachers, rooms, lessons, assignments };
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `均一課表匯出_${new Date().toLocaleDateString()}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-            };
-
-            // 匯出 Word 邏輯 (完全仿照 Excel/PDF 格式，包含班級與教師)
+            // 全校課表 Word 打包匯出（含班級與全體教師課表）
             const handleExportWord = () => {
                 let html = `
                 <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -842,519 +1012,414 @@
                     <style>
                     body { font-family: "Microsoft JhengHei", "PMingLiU", serif; }
                     .page-container { margin: 20px; }
-                    .header-main { font-size: 16pt; font-weight: bold; text-align: center; margin-bottom: 5px; }
-                    .header-sub { font-size: 12pt; text-align: center; margin-bottom: 10px; }
-                    
-                    table { border-collapse: collapse; width: 100%; table-layout: fixed; border: 2px solid #000; }
-                    td, th { border: 1px solid #000; padding: 4px; text-align: center; vertical-align: middle; word-wrap: break-word; }
-                    
-                    .bg-gray { background-color: #f0f0f0; }
-                    .font-bold { font-weight: bold; }
-                    
-                    .period-col { width: 50px; font-size: 10pt; }
-                    .time-col { width: 90px; font-size: 9pt; }
-                    .day-col { font-size: 10pt; }
-                    .info-col { width: 15%; font-size: 10pt; }
-                    
-                    .lesson-subject { font-weight: bold; font-size: 11pt; display: block; }
+                    .header-title { font-size: 18pt; font-weight: bold; text-align: center; margin-bottom: 2pt; }
+                    .header-subtitle { font-size: 12pt; text-align: center; margin-bottom: 10pt; }
+                    .meta-table { width: 100%; border: none; margin-bottom: 5pt; }
+                    .meta-cell { border: none; text-align: center; font-size: 11pt; }
+                    .info-box { border: 1.5pt solid black; padding: 5pt; text-align: center; font-weight: bold; font-size: 12pt; width: 30%; }
+                    table.main-table { border-collapse: collapse; width: 100%; border: 2pt solid black; table-layout: fixed; }
+                    table.main-table th, table.main-table td { border: 1pt solid black; padding: 4pt; text-align: center; vertical-align: middle; word-wrap: break-word; }
+                    .bg-gray { background-color: #f2f2f2; }
+                    .period-col { width: 45pt; font-size: 10pt; }
+                    .time-col { width: 85pt; font-size: 9pt; }
+                    .day-col { font-size: 10pt; font-weight: bold; }
+                    .homeroom-col { width: 75pt; font-size: 10pt; font-weight: bold; }
+                    .lesson-subject { font-weight: bold; font-size: 11pt; display: block; margin-bottom: 2pt; }
                     .lesson-teacher { font-size: 9pt; color: #333; }
-                    .lesson-room { font-size: 8pt; color: #666; }
-                    
-                    .merged-event { font-weight: bold; color: #444; letter-spacing: 2px; }
-                    .subject-list { font-size: 9pt; text-align: left; padding: 5px; }
-                    .subject-item { display: inline-block; margin-right: 5px; }
-                    
-                    .page-break { page-break-after: always; break-after: page; }
+                    .lesson-room { font-size: 8pt; color: #777; font-style: italic; }
+                    .merged-section { font-weight: bold; color: #333; letter-spacing: 2pt; font-size: 10.5pt; }
+                    .subject-list-header { font-weight: bold; font-size: 11pt; border-bottom: 1pt solid #000; margin-bottom: 5pt; padding-bottom: 2pt; }
+                    .subject-list-item { text-align: left; font-size: 9pt; margin-bottom: 2pt; }
+                    .student-count-table { width: 100%; border: none; font-size: 8pt; }
+                    .student-count-table td { border: none !important; padding: 1pt !important; }
+                    .footer { text-align: right; font-size: 8pt; margin-top: 10pt; color: #999; }
+                    .page-break { page-break-after: always; }
                     </style>
                 </head>
-                <body>
-                `;
+                <body>`;
 
-                // 1. 班級課表
+                const buildRows = (id, all, subjs, type) => {
+                    const getCells = (periodId) => DAYS.map(day => {
+                        const l = type === 'Class'
+                            ? all.find(x => x.classId === id && x.day === day && x.periodId === periodId)
+                            : all.find(x => x.teacher.includes(id) && x.day === day && x.periodId === periodId);
+                        if (l) return `<td><span class="lesson-subject">${l.subject}</span><span class="lesson-teacher">${type === 'Class' ? l.teacher : l.classId + ' 班'}</span>${l.room ? `<br><span class="lesson-room">📍${l.room}</span>` : ''}</td>`;
+                        return '<td></td>';
+                    }).join('');
+
+                    let rows = `<tr><td class="period-col bg-gray">晨間</td><td class="time-col bg-gray">07:50-08:00</td><td colspan="5" class="merged-section">晨間彈性時間 Quiet Time</td><td></td></tr>`;
+                    rows += `<tr><td class="period-col bg-gray">1</td><td class="time-col bg-gray">08:00-09:00</td>${getCells(1)}<td rowspan="2" style="vertical-align: top; padding: 5pt;">${type === 'Class' ? '<div style="font-weight:bold; font-size: 9pt; margin-bottom: 5pt;">學生人數<br><span style="font-size:8pt">Total of Students</span></div><table class="student-count-table"><tr><td>女生<br>Girls</td><td>男生<br>Boys</td></tr><tr><td style="border-bottom: 1pt solid #ccc !important;">&nbsp;</td><td style="border-bottom: 1pt solid #ccc !important;">&nbsp;</td></tr><tr><td colspan="2" style="text-align: right; padding-top: 5pt !important; font-size: 10pt;">人</td></tr></table>' : ''}</td></tr>`;
+                    rows += `<tr><td class="period-col bg-gray">2</td><td class="time-col bg-gray">09:00-10:00</td>${getCells(2)}</tr>`;
+                    rows += `<tr><td class="period-col bg-gray">大下課</td><td class="time-col bg-gray">10:00-10:30</td><td colspan="5" class="merged-section">下課時間 Recess</td><td rowspan="8" style="vertical-align: top; padding: 8pt; text-align: left;"><div class="subject-list-header">授課科目<br>Subjects</div>${subjs.map(s => `<div class="subject-list-item">▪ ${s}</div>`).join('')}</td></tr>`;
+                    rows += `<tr><td class="period-col bg-gray">3</td><td class="time-col bg-gray">10:30-11:10</td>${getCells(3)}</tr>`;
+                    rows += `<tr><td class="period-col bg-gray">4</td><td class="time-col bg-gray">11:20-12:00</td>${getCells(4)}</tr>`;
+                    rows += `<tr><td class="period-col bg-gray">午餐</td><td class="time-col bg-gray">12:05-12:30</td><td colspan="5" class="merged-section">午餐 Lunch</td></tr>`;
+                    rows += `<tr><td class="period-col bg-gray">午休</td><td class="time-col bg-gray">12:30-13:20</td><td colspan="5" class="merged-section">午休 Quiet Time</td></tr>`;
+                    rows += `<tr><td class="period-col bg-gray">5</td><td class="time-col bg-gray">13:20-14:00</td>${getCells(5)}</tr>`;
+                    rows += `<tr><td class="period-col bg-gray">6</td><td class="time-col bg-gray">14:10-14:50</td>${getCells(6)}</tr>`;
+                    rows += `<tr><td class="period-col bg-gray">7</td><td class="time-col bg-gray">14:50-15:30</td>${getCells(7)}</tr>`;
+                    return rows;
+                };
+
+                // 班級分頁
                 CLASSES.forEach(cls => {
-                const classLessons = lessons.filter(l => l.classId === cls);
-                const allSubjects = Array.from(new Set(classLessons.map(l => l.subject))).sort() as string[];
-
-                html += `
+                    const clsLessons = lessons.filter(l => l.classId === cls);
+                    const subjs = Array.from(new Set(clsLessons.map(l => l.subject))).sort();
+                    html += `
                     <div class="page-container">
-                    <div class="header-main">均一國際教育高級中等學校 課表<br><span style="font-size: 12pt; font-weight: normal;">Junyi School of Innovation Timetable</span></div>
-                    
-                    <table style="border: none; width: 100%; margin-bottom: 5px;">
-                        <tr>
-                        <td style="border: none; text-align: center; width: 33%;">學年度日課表</td>
-                        <td style="border: none; text-align: center; width: 33%;">第 &nbsp;&nbsp;&nbsp;&nbsp; 學期 Timetable</td>
-                        <td style="border: 1px solid #000; text-align: center; width: 33%;">班級：${cls}</td>
-                        </tr>
-                    </table>
-
-                    <table>
-                        <thead>
-                        <tr>
-                            <th colspan="2" class="bg-gray">星期<br><span style="font-size: 9pt;">Date</span></th>
-                            <th class="day-col">一<br>Mon</th>
-                            <th class="day-col">二<br>Tue</th>
-                            <th class="day-col">三<br>Wed</th>
-                            <th class="day-col">四<br>Thu</th>
-                            <th class="day-col">五<br>Fri</th>
-                            <th class="info-col">導師</th>
-                        </tr>
-                        <tr>
-                            <th class="period-col">節次<br><span style="font-size: 8pt;">Period</span></th>
-                            <th class="time-col"></th>
-                            <th colspan="5"></th>
-                            <th>Homeroom<br>Teacher</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                `;
-
-                html += buildTimetableRows(cls, lessons, allSubjects, 'Class');
-
-                html += `
-                        </tbody>
-                    </table>
-                    <div style="margin-top: 10px; font-size: 9pt; text-align: right;">Generated by Junyi Scheduling System</div>
-                    </div>
-                    <div class="page-break"></div>
-                `;
+                        <div class="header-title">均一國際教育高級中等學校 課表</div>
+                        <div class="header-subtitle">Junyi School of Innovation Timetable</div>
+                        <table class="meta-table"><tr><td class="meta-cell" style="width: 35%;">學年度日課表</td><td class="meta-cell" style="width: 35%;">第 &nbsp;&nbsp;&nbsp;&nbsp; 學期 Timetable</td><td class="info-box">班級：${cls}</td></tr></table>
+                        <table class="main-table">
+                            <thead>
+                                <tr class="bg-gray"><th colspan="2" style="height: 40pt;">星期<br><span style="font-size:8pt">Date</span></th><th class="day-col">一<br><span style="font-size:8pt">Mon</span></th><th class="day-col">二<br><span style="font-size:8pt">Tue</span></th><th class="day-col">三<br><span style="font-size:8pt">Wed</span></th><th class="day-col">四<br><span style="font-size:8pt">Thu</span></th><th class="day-col">五<br><span style="font-size:8pt">Fri</span></th><th class="homeroom-col">導師</th></tr>
+                                <tr class="bg-gray"><th class="period-col">節次<br><span style="font-size:8pt">Period</span></th><th class="time-col"></th><th colspan="5"></th><th style="font-size:8pt">Homeroom<br>Teacher</th></tr>
+                            </thead>
+                            <tbody>${buildRows(cls, lessons, subjs, 'Class')}</tbody>
+                        </table>
+                        <div class="footer">Generated by Junyi Scheduling System</div>
+                    </div><div class="page-break"></div>`;
                 });
 
-                // 2. 教師課表 (新增部分)
-                teachers.forEach(teacher => {
-                const teacherLessons = lessons.filter(l => l.teacher.includes(teacher));
-                const allSubjects = Array.from(new Set(teacherLessons.map(l => l.subject))).sort() as string[];
-
-                html += `
+                // 教師分頁
+                teachers.forEach(t => {
+                    const tLessons = lessons.filter(l => l.teacher.includes(t));
+                    const subjs = Array.from(new Set(tLessons.map(l => l.subject))).sort();
+                    html += `
                     <div class="page-container">
-                    <div class="header-main">均一國際教育高級中等學校 課表<br><span style="font-size: 12pt; font-weight: normal;">Teacher Timetable</span></div>
-                    
-                    <table style="border: none; width: 100%; margin-bottom: 5px;">
-                        <tr>
-                        <td style="border: none; text-align: center; width: 33%;">學年度日課表</td>
-                        <td style="border: none; text-align: center; width: 33%;">第 &nbsp;&nbsp;&nbsp;&nbsp; 學期 Timetable</td>
-                        <td style="border: 1px solid #000; text-align: center; width: 33%;">教師：${teacher}</td>
-                        </tr>
-                    </table>
-
-                    <table>
-                        <thead>
-                        <tr>
-                            <th colspan="2" class="bg-gray">星期<br><span style="font-size: 9pt;">Date</span></th>
-                            <th class="day-col">一<br>Mon</th>
-                            <th class="day-col">二<br>Tue</th>
-                            <th class="day-col">三<br>Wed</th>
-                            <th class="day-col">四<br>Thu</th>
-                            <th class="day-col">五<br>Fri</th>
-                            <th class="info-col">備註</th>
-                        </tr>
-                        <tr>
-                            <th class="period-col">節次<br><span style="font-size: 8pt;">Period</span></th>
-                            <th class="time-col"></th>
-                            <th colspan="5"></th>
-                            <th>Note</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                `;
-
-                html += buildTimetableRows(teacher, lessons, allSubjects, 'Teacher');
-
-                html += `
-                        </tbody>
-                    </table>
-                    <div style="margin-top: 10px; font-size: 9pt; text-align: right;">Generated by Junyi Scheduling System</div>
-                    </div>
-                    <div class="page-break"></div>
-                `;
+                        <div class="header-title">均一國際教育高級中等學校 課表</div>
+                        <div class="header-subtitle">Teacher Timetable</div>
+                        <table class="meta-table"><tr><td class="meta-cell" style="width: 35%;">學年度日課表</td><td class="meta-cell" style="width: 35%;">第 &nbsp;&nbsp;&nbsp;&nbsp; 學期 Timetable</td><td class="info-box">教師：${t}</td></tr></table>
+                        <table class="main-table">
+                            <thead>
+                                <tr class="bg-gray"><th colspan="2" style="height: 40pt;">星期<br><span style="font-size:8pt">Date</span></th><th class="day-col">一<br><span style="font-size:8pt">Mon</span></th><th class="day-col">二<br><span style="font-size:8pt">Tue</span></th><th class="day-col">三<br><span style="font-size:8pt">Wed</span></th><th class="day-col">四<br><span style="font-size:8pt">Thu</span></th><th class="day-col">五<br><span style="font-size:8pt">Fri</span></th><th class="homeroom-col">備註</th></tr>
+                                <tr class="bg-gray"><th class="period-col">節次<br><span style="font-size:8pt">Period</span></th><th class="time-col"></th><th colspan="5"></th><th style="font-size:8pt">Note</th></tr>
+                            </thead>
+                            <tbody>${buildRows(t, lessons, subjs, 'Teacher')}</tbody>
+                        </table>
+                        <div class="footer">Generated by Junyi Scheduling System</div>
+                    </div><div class="page-break"></div>`;
                 });
 
-                html += `</body></html>`;
+                html += '</body></html>';
                 const blob = new Blob([html], { type: 'application/msword' });
                 const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `均一全校完整課表(含教師)_${new Date().toLocaleDateString()}.doc`;
-                a.click();
+                const a = document.createElement('a'); a.href = url; a.download = `均一全校完整課表_${new Date().toLocaleDateString()}.doc`; a.click();
                 URL.revokeObjectURL(url);
             };
 
-            // 共用的列構建函式
-            const buildTimetableRows = (id: string, allLessons: Lesson[], subjects: string[], type: 'Class' | 'Teacher') => {
-                let rowsHtml = '';
+            return h('div', { className: 'min-h-screen bg-gray-50 flex font-sans text-gray-900 overflow-x-hidden' }, [
+                h(Sidebar, {
+                    currentView: viewMode,
+                    currentFilter: viewFilter,
+                    teachers,
+                    rooms,
+                    onViewChange: (m, f) => { setViewMode(m); setViewFilter(f); }
+                }),
+                h('main', { className: 'flex-1 p-4 lg:p-10' }, [
+                    h('header', { className: 'flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 no-print' }, [
+                        h('div', { className: 'flex gap-2 bg-white p-1.5 rounded-[2rem] shadow-sm border border-gray-100' }, [
+                            h('button', { onClick: () => switchMode('Master'), className: `px-6 py-3 text-xs font-black rounded-full transition-all ${viewMode === 'Master' ? 'bg-gray-900 text-white shadow-xl' : 'text-gray-400 hover:text-gray-900'}` }, '全校總表'),
+                            h('button', { onClick: () => switchMode('Class'), className: `px-6 py-3 text-xs font-black rounded-full transition-all ${viewMode === 'Class' ? 'bg-gray-900 text-white shadow-xl' : 'text-gray-400 hover:text-gray-900'}` }, '班級課表'),
+                            h('button', { onClick: () => switchMode('Teacher'), className: `px-6 py-3 text-xs font-black rounded-full transition-all ${viewMode === 'Teacher' ? 'bg-gray-900 text-white shadow-xl' : 'text-gray-400 hover:text-gray-900'}` }, '教師課表'),
+                            h('button', { onClick: () => switchMode('Room'), className: `px-6 py-3 text-xs font-black rounded-full transition-all ${viewMode === 'Room' ? 'bg-gray-900 text-white shadow-xl' : 'text-gray-400 hover:text-gray-900'}` }, '場地課表')
+                        ]),
+                        h('div', { className: 'flex items-center gap-3' }, [
+                            h('button', {
+                                onClick: () => setIsUpgradeModalOpen(true),
+                                className: 'px-5 py-3 rounded-2xl text-xs font-black bg-emerald-600 text-white shadow-xl hover:scale-105 transition-all'
+                            }, '🎓 學級升級'),
+                            h('button', {
+                                onClick: () => setIsStampMode(!isStampMode),
+                                className: `px-5 py-3 rounded-2xl text-xs font-black transition-all border-2 ${isStampMode ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'bg-white text-indigo-600 border-indigo-50 hover:border-indigo-200'}`
+                            }, isStampMode ? '✨ 關閉印章' : '🎨 印章模式'),
+                            conflicts.length > 0 && h('button', {
+                                onClick: handleAutoResolveConflicts,
+                                className: 'px-4 py-3 rounded-2xl text-xs font-black bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white shadow-xl hover:scale-105 transition-all flex items-center gap-1.5'
+                            }, [
+                                h('span', null, '⚡'),
+                                h('span', null, '一鍵化解衝堂')
+                            ]),
+                            h('button', {
+                                onClick: () => switchMode('Conflict'),
+                                className: `px-5 py-3 rounded-2xl text-xs font-black transition-all ${conflicts.length > 0 ? 'bg-red-500 text-white shadow-md' : 'bg-white text-gray-400 border'}`
+                            }, `⚠️ 衝堂 (${conflicts.length})`),
+                            h('button', {
+                                onClick: () => setIsAIModalOpen(true),
+                                className: 'px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl text-xs font-black shadow-xl'
+                            }, '🪄 AI 排課'),
+                            h('div', { className: 'h-8 w-px bg-gray-200 mx-2' }),
+                            h('button', {
+                                onClick: () => fileInputRef.current.click(),
+                                className: 'w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors',
+                                title: '匯入'
+                            }, '📥'),
+                            h('button', {
+                                onClick: () => {
+                                    const data = { teachers, rooms, lessons, assignments };
+                                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a'); a.href = url; a.download = 'Junyi_Data.json'; a.click();
+                                    URL.revokeObjectURL(url);
+                                },
+                                className: 'w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors',
+                                title: '導出 JSON'
+                            }, '💾'),
+                            h('button', {
+                                onClick: handleExportWord,
+                                className: 'w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors',
+                                title: '導出 Word'
+                            }, '📝'),
+                            h('button', {
+                                onClick: () => switchMode('TeacherAdmin'),
+                                className: 'w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors',
+                                title: '管理老師'
+                            }, '👥'),
+                            h('button', {
+                                onClick: () => switchMode('RoomAdmin'),
+                                className: 'w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors',
+                                title: '管理場地'
+                            }, '🏫')
+                        ])
+                    ]),
+                    viewMode === 'Master' && h(MasterMatrix, {
+                        lessons,
+                        conflictingLessonIds,
+                        isStampMode,
+                        onCellClick: handleCellClick,
+                        onMoveLesson: handleMoveLesson,
+                        onCopyLesson: (l) => { setClipboard(l); setIsStampMode(true); },
+                        onToggleLock: (l) => setLessons(prev => prev.map(x => x.id === l.id ? { ...x, isLocked: !x.isLocked } : x)),
+                        onLockAll: () => setLessons(prev => prev.map(x => ({ ...x, isLocked: true }))),
+                        onUnlockAll: () => setLessons(prev => prev.map(x => ({ ...x, isLocked: false }))),
+                        onClearAll: () => setLessons(prev => prev.filter(x => x.isLocked)),
+                        onAutoResolve: handleAutoResolveConflicts,
+                        conflictCount: conflicts.length
+                    }),
+                    ['Class', 'Teacher', 'Room'].includes(viewMode) && h(TimetableGrid, {
+                        lessons: filteredLessons,
+                        conflictingLessonIds,
+                        title: `${viewFilter} ${viewMode === 'Class' ? '班級' : viewMode === 'Teacher' ? '老師' : '場地'}`,
+                        onCellClick: (day, periodId) => handleCellClick(day, periodId, viewMode === 'Class' ? viewFilter : ''),
+                        onMoveLesson: handleMoveLesson,
+                        onCopyLesson: (l) => { setClipboard(l); setIsStampMode(true); },
+                        onToggleLock: (l) => setLessons(prev => prev.map(x => x.id === l.id ? { ...x, isLocked: !x.isLocked } : x)),
+                        isStampMode,
+                        currentClassId: viewMode === 'Class' ? viewFilter : undefined
+                    }),
+                    viewMode === 'TeacherAdmin' && h(TeacherManager, {
+                        teachers,
+                        assignments,
+                        onAddTeacher: (n) => setTeachers(prev => [...prev, n]),
+                        onAddBatchTeachers: (names) => setTeachers(prev => [...prev, ...names]),
+                        onRemoveTeacher: (n) => setTeachers(prev => prev.filter(t => t !== n)),
+                        onUpdateAssignments: (name, as) => setAssignments(prev => ({ ...prev, [name]: as })),
+                        lessonCounts: teacherLessonCounts,
+                        lessons,
+                        onSyncDoublePeriods: handleCleanDoublePeriods
+                    }),
+                    viewMode === 'RoomAdmin' && h(RoomManager, {
+                        rooms,
+                        onAddRoom: (n) => setRooms(prev => [...prev, n]),
+                        onRemoveRoom: (n) => setRooms(prev => prev.filter(r => r !== n)),
+                        lessonCounts: roomLessonCounts
+                    }),
+                    viewMode === 'Conflict' && h(ConflictList, {
+                        conflicts,
+                        lessons,
+                        onLessonEdit: (l) => { setEditingLesson(l); setIsEditing(true); },
+                        onAutoResolve: handleAutoResolveConflicts,
+                        onCleanDoublePeriods: handleCleanDoublePeriods,
+                        onToggleLock: (id) => setLessons(prev => prev.map(x => x.id === id ? { ...x, isLocked: !x.isLocked } : x))
+                    })
+                ]),
 
-                // 1. 晨間
-                rowsHtml += `
-                <tr>
-                    <td class="period-col">晨間</td>
-                    <td class="time-col">07:50-08:00</td>
-                    <td colspan="5" class="merged-event">晨間彈性時間 Quiet Time</td>
-                    <td class="font-bold">&nbsp;</td>
-                </tr>
-                `;
+                // 全域 Toast 訊息浮動通知
+                toast && h('div', {
+                    className: `fixed top-6 right-6 z-[100] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border ${
+                        toast.type === 'success' ? 'bg-emerald-900/95 text-white border-emerald-500/50' :
+                        toast.type === 'error' ? 'bg-red-900/95 text-white border-red-500/50' : 'bg-indigo-900/95 text-white border-indigo-500/50'
+                    }`
+                }, [
+                    h('span', { className: 'text-xl' }, toast.type === 'success' ? '✅' : toast.type === 'error' ? '⚠️' : 'ℹ️'),
+                    h('span', { className: 'text-sm font-black tracking-wide' }, toast.message),
+                    h('button', { onClick: () => setToast(null), className: 'ml-2 text-white/60 hover:text-white font-black' }, '✕')
+                ]),
 
-                // 2. 第一節
-                rowsHtml += `
-                <tr>
-                    <td class="period-col">1</td>
-                    <td class="time-col">08:00-09:00</td>
-                    ${type === 'Class' ? generateLessonCells(id, 1, allLessons) : generateTeacherLessonCells(id, 1, allLessons)}
-                    <td rowspan="2" style="vertical-align: top;">
-                    ${type === 'Class' ? `
-                    <div style="margin-bottom: 5px; font-weight: bold;">學生人數<br><span style="font-size:8pt">Total of Students</span></div>
-                    <table style="width: 100%; border: none;">
-                        <tr><td style="border:none; font-size: 9pt;">女生<br>Girls</td><td style="border:none; font-size: 9pt;">男生<br>Boys</td></tr>
-                        <tr><td style="border:none; border-bottom:1px solid #ddd;">&nbsp;</td><td style="border:none; border-bottom:1px solid #ddd;">&nbsp;</td></tr>
-                        <tr><td colspan="2" style="border:none; text-align:right; padding-top:5px;">人</td></tr>
-                    </table>
-                    ` : `&nbsp;`}
-                    </td>
-                </tr>
-                `;
+                // AI 排課彈窗
+                isAIModalOpen && h('div', { className: 'fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 no-print' }, [
+                    h('div', { className: 'bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden' }, [
+                        h('div', { className: 'p-10 bg-indigo-900 text-white' }, [
+                            h('h3', { className: 'text-3xl font-black mb-2' }, 'AI 智能排課助理'),
+                            h('p', { className: 'text-indigo-200 text-sm font-bold' }, '請描述您的排課偏好或限制，系統將為您生成方案。已鎖定課程（🔒）會受到保護。')
+                        ]),
+                        h('div', { className: 'p-10 space-y-6' }, [
+                            h('textarea', {
+                                className: 'w-full h-48 p-6 rounded-[2rem] bg-gray-50 border-2 outline-none font-bold text-lg resize-none shadow-inner',
+                                placeholder: '例如：請將國語課都排在早上，且體育課不要排在週五...',
+                                value: aiPrompt,
+                                onChange: e => setAiPrompt(e.target.value)
+                            }),
+                            h('div', { className: 'flex gap-4' }, [
+                                h('button', { onClick: () => setIsAIModalOpen(false), className: 'flex-1 py-5 text-gray-500 font-black rounded-2xl hover:bg-gray-100' }, '取消'),
+                                h('button', {
+                                    onClick: () => {
+                                        setIsAILoading(true);
+                                        setTimeout(() => {
+                                            handleAutoResolveConflicts();
+                                            setIsAILoading(false);
+                                            setIsAIModalOpen(false);
+                                            setAiPrompt('');
+                                        }, 1000);
+                                    },
+                                    className: 'flex-[2] py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl hover:bg-indigo-700'
+                                }, isAILoading ? '🤖 運算排課中...' : '✨ 開始排課')
+                            ])
+                        ])
+                    ])
+                ]),
 
-                // 3. 第二節
-                rowsHtml += `
-                <tr>
-                    <td class="period-col">2</td>
-                    <td class="time-col">09:00-10:00</td>
-                    ${type === 'Class' ? generateLessonCells(id, 2, allLessons) : generateTeacherLessonCells(id, 2, allLessons)}
-                </tr>
-                `;
+                // 學級升級確認彈窗
+                isUpgradeModalOpen && h('div', { className: 'fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 no-print' }, [
+                    h('div', { className: 'bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden p-8' }, [
+                        h('h3', { className: 'text-2xl font-black text-emerald-800 mb-4' }, '學級升級確認'),
+                        h('p', { className: 'text-gray-600 mb-6' }, '執行後，導師將晉換班級並繼承該班導師之所有配課內容。科任老師留任原班級教學。'),
+                        h('div', { className: 'flex gap-4' }, [
+                            h('button', { onClick: () => setIsUpgradeModalOpen(false), className: 'flex-1 py-4 text-gray-400 font-black' }, '取消'),
+                            h('button', { onClick: handleAcademicYearUpgrade, className: 'flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black' }, '確認執行升級')
+                        ])
+                    ])
+                ]),
 
-                // 4. 大下課 (Recess)
-                rowsHtml += `
-                <tr>
-                    <td class="period-col">大下課</td>
-                    <td class="time-col">10:00-10:30</td>
-                    <td colspan="5" class="merged-event">下課時間 Recess</td>
-                    <td rowspan="8" style="vertical-align: top; text-align: left;">
-                    <div style="text-align: center; font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 2px;">授課科目 Subjects</div>
-                    <div class="subject-list">
-                        ${subjects.map(s => `<span class="subject-item\">▪ ${s}</span>`).join('<br>')}
-                    </div>
-                    </td>
-                </tr>
-                `;
+                // 編輯課程彈窗
+                isEditing && h('div', { className: 'fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 no-print' }, [
+                    h('div', { className: 'bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden' }, [
+                        h('div', { className: 'p-8 bg-gray-900 text-white flex justify-between items-center' }, [
+                            h('h3', { className: 'text-xl font-black' }, '編輯課程詳細資料'),
+                            h('button', { onClick: () => setIsEditing(false) }, '✕')
+                        ]),
+                        h('div', { className: 'p-8 space-y-5' }, [
+                            h('div', null, [
+                                h('label', { className: 'block text-[10px] font-black text-gray-400 uppercase mb-2' }, '科目名稱'),
+                                h('input', {
+                                    className: 'w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 font-black',
+                                    value: editingLesson?.subject || '',
+                                    onChange: e => setEditingLesson(prev => ({ ...prev, subject: e.target.value }))
+                                })
+                            ]),
+                            h('div', null, [
+                                h('label', { className: 'block text-[10px] font-black text-gray-400 uppercase mb-2' }, '課程顏色類別'),
+                                h('div', { className: 'grid grid-cols-3 gap-2' }, COLOR_OPTIONS.map(opt =>
+                                    h('button', {
+                                        key: opt.value,
+                                        type: 'button',
+                                        onClick: () => setEditingLesson(prev => ({ ...prev, color: opt.value })),
+                                        className: `px-3 py-2 rounded-xl border-2 text-[11px] font-black transition-all ${editingLesson?.color === opt.value ? 'border-gray-900' : 'border-transparent opacity-60'} ${opt.value}`
+                                    }, opt.label)
+                                ))
+                            ]),
+                            h('div', { className: 'grid grid-cols-2 gap-4' }, [
+                                h('div', null, [
+                                    h('label', { className: 'block text-[10px] font-black text-gray-400 uppercase mb-2' }, '主要教師'),
+                                    h('select', {
+                                        className: 'w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 font-black',
+                                        value: formTeacher1,
+                                        onChange: e => setFormTeacher1(e.target.value)
+                                    }, [
+                                        h('option', { value: '' }, '請選擇'),
+                                        ...teachers.map(t => h('option', { key: t, value: t }, t))
+                                    ])
+                                ]),
+                                h('div', null, [
+                                    h('label', { className: 'block text-[10px] font-black text-gray-400 uppercase mb-2' }, '協同教師'),
+                                    h('select', {
+                                        className: 'w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 font-black',
+                                        value: formTeacher2,
+                                        onChange: e => setFormTeacher2(e.target.value)
+                                    }, [
+                                        h('option', { value: '' }, '無'),
+                                        ...teachers.map(t => h('option', { key: t, value: t }, t))
+                                    ])
+                                ])
+                            ]),
+                            h('div', null, [
+                                h('label', { className: 'block text-[10px] font-black text-gray-400 uppercase mb-2' }, '授課地點'),
+                                h('select', {
+                                    className: 'w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 font-black',
+                                    value: editingLesson?.room || '',
+                                    onChange: e => setEditingLesson(prev => ({ ...prev, room: e.target.value }))
+                                }, [
+                                    h('option', { value: '' }, '原班級教室'),
+                                    ...rooms.map(r => h('option', { key: r, value: r }, r))
+                                ])
+                            ]),
+                            h('div', null, [
+                                h('label', { className: 'flex items-center gap-3 p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl cursor-pointer' }, [
+                                    h('input', {
+                                        type: 'checkbox',
+                                        checked: !!editingLesson?.isDouble,
+                                        onChange: e => setEditingLesson(prev => ({ ...prev, isDouble: e.target.checked })),
+                                        className: 'w-5 h-5 text-indigo-600 rounded'
+                                    }),
+                                    h('div', null, [
+                                        h('span', { className: 'text-sm font-black text-indigo-950 block' }, '🔗 設定為連堂課程（雙節成對排課）'),
+                                        h('span', { className: 'text-[11px] text-indigo-500 font-bold block mt-0.5' }, '儲存時將自動在成對節次（1-2節、3-4節、5-6節）連動排入隔壁節')
+                                    ])
+                                ])
+                            ]),
+                            h('div', null, [
+                                h('label', { className: 'flex items-center gap-3 p-4 bg-amber-50/70 border border-amber-200 rounded-2xl cursor-pointer' }, [
+                                    h('input', {
+                                        type: 'checkbox',
+                                        checked: !!editingLesson?.isLocked,
+                                        onChange: e => setEditingLesson(prev => ({ ...prev, isLocked: e.target.checked })),
+                                        className: 'w-5 h-5 text-amber-600 rounded'
+                                    }),
+                                    h('div', null, [
+                                        h('span', { className: 'text-sm font-black text-amber-950 block' }, '🔒 鎖定此課程（排課與消除衝堂時絕不移動）'),
+                                        h('span', { className: 'text-[11px] text-amber-700 font-bold block mt-0.5' }, '若取消勾選，演算法將可在「一鍵自動消除衝堂」時調動此課程以避開衝堂')
+                                    ])
+                                ])
+                            ]),
+                            h('div', { className: 'flex gap-4 pt-4' }, [
+                                editingLesson?.id && h('button', { onClick: handleDeleteLesson, className: 'flex-1 py-4 bg-red-50 text-red-600 rounded-2xl font-black' }, '刪除'),
+                                h('button', { onClick: handleSaveLesson, className: 'flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black' }, '儲存變更')
+                            ])
+                        ])
+                    ])
+                ]),
 
-                // 5. 第三節
-                rowsHtml += `
-                <tr>
-                    <td class="period-col">3</td>
-                    <td class="time-col">10:30-11:15</td>
-                    ${type === 'Class' ? generateLessonCells(id, 3, allLessons) : generateTeacherLessonCells(id, 3, allLessons)}
-                </tr>
-                `;
+                // 隱藏的檔案匯入 input
+                h('input', {
+                    type: 'file',
+                    ref: fileInputRef,
+                    accept: '.json',
+                    className: 'hidden',
+                    onChange: (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            try {
+                                const data = JSON.parse(event.target.result);
+                                if (data.teachers) setTeachers(data.teachers);
+                                if (data.rooms) setRooms(data.rooms);
+                                if (data.lessons) setLessons(data.lessons);
+                                if (data.assignments) setAssignments(data.assignments);
+                                showToast('📥 課表資料匯入成功！', 'success');
+                            } catch (err) {
+                                showToast('匯入失敗，請確認檔案格式是否正確。', 'error');
+                            }
+                        };
+                        reader.readAsText(file);
+                        e.target.value = '';
+                    }
+                })
+            ]);
+        }
 
-                // 6. 第四節
-                rowsHtml += `
-                <tr>
-                    <td class="period-col">4</td>
-                    <td class="time-col">11:20-12:05</td>
-                    ${type === 'Class' ? generateLessonCells(id, 4, allLessons) : generateTeacherLessonCells(id, 4, allLessons)}
-                </tr>
-                `;
-
-                // 7. 午餐
-                rowsHtml += `
-                <tr>
-                    <td class="period-col">午餐</td>
-                    <td class="time-col">12:05-12:30</td>
-                    <td colspan="5" class="merged-event">午餐 Lunch</td>
-                </tr>
-                `;
-
-                // 8. 午休
-                rowsHtml += `
-                <tr>
-                    <td class="period-col">午休</td>
-                    <td class="time-col">12:30-13:10</td>
-                    <td colspan="5" class="merged-event">午休 Quiet Time</td>
-                </tr>
-                `;
-
-                // 9. 第五節
-                rowsHtml += `
-                <tr>
-                    <td class="period-col">5</td>
-                    <td class="time-col">13:15-14:00</td>
-                    ${type === 'Class' ? generateLessonCells(id, 5, allLessons) : generateTeacherLessonCells(id, 5, allLessons)}
-                </tr>
-                `;
-
-                // 10. 第六節
-                rowsHtml += `
-                <tr>
-                    <td class="period-col">6</td>
-                    <td class="time-col">14:05-14:50</td>
-                    ${type === 'Class' ? generateLessonCells(id, 6, allLessons) : generateTeacherLessonCells(id, 6, allLessons)}
-                </tr>
-                `;
-
-                // 11. 第七節
-                rowsHtml += `
-                <tr>
-                    <td class="period-col">7</td>
-                    <td class="time-col">14:50-15:30</td>
-                    ${type === 'Class' ? generateLessonCells(id, 7, allLessons) : generateTeacherLessonCells(id, 7, allLessons)}
-                </tr>
-                `;
-
-                return rowsHtml;
-            };
-
-            // 輔助函式：產生課程單元格 HTML (班級視角)
-            const generateLessonCells = (classId: string, periodId: number, allLessons: Lesson[]) => {
-                return DAYS.map(day => {
-                const lesson = allLessons.find(l => l.classId === classId && l.periodId === periodId && l.day === day);
-                if (lesson) {
-                    return `
-                    <td>
-                        <span class="lesson-subject">${lesson.subject}</span>
-                        <span class="lesson-teacher">${lesson.teacher}</span>
-                        ${lesson.room ? `<br><span class="lesson-room">📍${lesson.room}</span>` : ''}
-                    </td>
-                    `;
-                } else {
-                    return `<td></td>`;
-                }
-                }).join('');
-            };
-
-            // 輔助函式：產生課程單元格 HTML (教師視角)
-            const generateTeacherLessonCells = (teacherName: string, periodId: number, allLessons: Lesson[]) => {
-                return DAYS.map(day => {
-                // 找出該老師在該時段的所有課程 (可能有協同教學)
-                const lesson = allLessons.find(l => l.teacher.includes(teacherName) && l.periodId === periodId && l.day === day);
-                if (lesson) {
-                    return `
-                    <td>
-                        <span class="lesson-subject">${lesson.subject}</span>
-                        <span class="lesson-teacher">${lesson.classId} 班</span>
-                        ${lesson.room ? `<br><span class="lesson-room\">📍${lesson.room}</span>` : ''}
-                    </td>
-                    `;
-                } else {
-                    return `<td></td>`;
-                }
-                }).join('');
-            };
-
-            const handleImportClick = () => { fileInputRef.current?.click(); };
-
-            const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                try {
-                    const data = JSON.parse(event.target?.result as string);
-                    if (data.teachers) setTeachers(data.teachers as string[]);
-                    if (data.rooms) setRooms(data.rooms as string[]);
-                    if (data.lessons) setLessons(data.lessons as Lesson[]);
-                    if (data.assignments) setAssignments(data.assignments);
-                    alert('匯入成功！');
-                } catch (err) {
-                    alert('檔案格式錯誤，匯入失敗。');
-                }
-                };
-                reader.readAsText(file);
-                e.target.value = '';
-            };
-
-            return (
-                <div className="min-h-screen bg-gray-50 flex font-sans text-gray-900 overflow-x-hidden">
-                <Sidebar 
-                    currentView={viewMode} 
-                    currentFilter={viewFilter} 
-                    teachers={teachers} 
-                    rooms={rooms} 
-                    onViewChange={(mode, filter) => { setViewMode(mode); setViewFilter(filter); }} 
-                />
-                
-                <main className="flex-1 p-4 lg:p-10">
-                    <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 no-print">
-                    <div className="flex gap-2 bg-white p-1.5 rounded-[2rem] shadow-sm border border-gray-100">
-                        <button onClick={() => switchMode('Master')} className={`px-6 py-3 text-xs font-black rounded-full transition-all ${viewMode === 'Master' ? 'bg-gray-900 text-white shadow-xl' : 'text-gray-400 hover:text-gray-900'}`}>全校總表</button>
-                        <button onClick={() => switchMode('Class')} className={`px-6 py-3 text-xs font-black rounded-full transition-all ${viewMode === 'Class' ? 'bg-gray-900 text-white shadow-xl' : 'text-gray-400 hover:text-gray-900'}`}>班級課表</button>
-                        <button onClick={() => switchMode('Teacher')} className={`px-6 py-3 text-xs font-black rounded-full transition-all ${viewMode === 'Teacher' ? 'bg-gray-900 text-white shadow-xl' : 'text-gray-400 hover:text-gray-900'}`}>教師課表</button>
-                        <button onClick={() => switchMode('Room')} className={`px-6 py-3 text-xs font-black rounded-full transition-all ${viewMode === 'Room' ? 'bg-gray-900 text-white shadow-xl' : 'text-gray-400 hover:text-gray-900'}`}>場地課表</button>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setIsStampMode(!isStampMode)} className={`px-5 py-3 rounded-2xl text-xs font-black transition-all border-2 ${isStampMode ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'bg-white text-indigo-600 border-indigo-50 hover:border-indigo-200'}`}>
-                        {isStampMode ? '✨ 關閉印章' : '🎨 印章模式'}
-                        </button>
-                        <button onClick={() => switchMode('Conflict')} className={`px-5 py-3 rounded-2xl text-xs font-black transition-all ${conflicts.length > 0 ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-gray-400 border border-gray-100'}`}>
-                        ⚠️ 衝堂檢核 ({conflicts.length})
-                        </button>
-                        <button onClick={() => setIsAIModalOpen(true)} className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl text-xs font-black shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95 transition-all">
-                        🪄 AI 自動排課
-                        </button>
-                        <div className="h-8 w-px bg-gray-200 mx-2"></div>
-                        <button onClick={handleImportClick} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors" title="匯入課表數據 (JSON)">📥</button>
-                        <button onClick={handleExport} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors" title="匯出課表數據 (JSON)">💾</button>
-                        <button onClick={handleExportWord} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors" title="匯出全校課表(含教師) Word">📝</button>
-                        <button onClick={() => switchMode('TeacherAdmin')} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors" title="管理老師">👥</button>
-                        <button onClick={() => switchMode('RoomAdmin')} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors" title="管理場地">🏫</button>
-                    </div>
-                    </header>
-
-                    {viewMode === 'Master' && (
-                    <MasterMatrix 
-                        lessons={lessons} 
-                        isStampMode={isStampMode}
-                        onCellClick={handleCellClick} 
-                        onMoveLesson={handleMoveLesson} 
-                        onCopyLesson={(l) => { setClipboard(l); setIsStampMode(true); }}
-                        onClearAll={handleClearAllLessons}
-                    />
-                    )}
-
-                    {(viewMode === 'Class' || viewMode === 'Teacher' || viewMode === 'Room') && (
-                    <TimetableGrid 
-                        lessons={filteredLessons} 
-                        title={viewFilter + (viewMode === 'Class' ? ' 班級課表' : viewMode === 'Teacher' ? ' 老師課表' : ' 場地課表')}
-                        subtitle={viewMode === 'Class' ? '查看該班級的一週課程安排' : '查看個別資源的使用情況'}
-                        onCellClick={(day, periodId) => handleCellClick(day, periodId, viewMode === 'Class' ? viewFilter : '')}
-                        onMoveLesson={handleMoveLesson}
-                        onCopyLesson={(l) => { setClipboard(l); setIsStampMode(true); }}
-                        isStampMode={isStampMode}
-                        currentClassId={viewMode === 'Class' ? viewFilter : undefined}
-                    />
-                    )}
-
-                    {viewMode === 'TeacherAdmin' && (
-                    <TeacherManager 
-                        teachers={teachers} 
-                        assignments={assignments}
-                        onAddTeacher={(n) => setTeachers(prev => [...prev, n])}
-                        onAddBatchTeachers={(names) => setTeachers(prev => [...prev, ...names])}
-                        onRemoveTeacher={(n) => setTeachers(prev => prev.filter(t => t !== n))}
-                        onUpdateAssignments={(name, as) => setAssignments(prev => ({ ...prev, [name]: as }))}
-                        lessonCounts={teacherLessonCounts}
-                    />
-                    )}
-
-                    {viewMode === 'RoomAdmin' && (
-                    <RoomManager 
-                        rooms={rooms} 
-                        onAddRoom={(n) => setRooms(prev => [...prev, n])} 
-                        onRemoveRoom={(n) => setRooms(prev => prev.filter(r => r !== n))} 
-                        lessonCounts={roomLessonCounts}
-                    />
-                    )}
-
-                    {viewMode === 'Conflict' && (
-                    <ConflictList 
-                        conflicts={conflicts} 
-                        lessons={lessons} 
-                        onLessonEdit={(l) => { setEditingLesson(l); setIsEditing(true); }}
-                    />
-                    )}
-                </main>
-
-                {/* AI Modal */}
-                {isAIModalOpen && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-300 no-print">
-                    <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-                        <div className="p-10 bg-indigo-900 text-white">
-                        <h3 className="text-3xl font-black mb-2">AI 智能排課助理</h3>
-                        <p className="text-indigo-300 font-medium">請描述您的排課偏好或限制，Gemini 將為您生成最佳方案。</p>
-                        </div>
-                        <div className="p-10 space-y-6">
-                        <textarea 
-                            className="w-full h-48 p-6 rounded-[2rem] bg-gray-50 border-2 border-transparent focus:border-indigo-500 outline-none font-bold text-lg shadow-inner resize-none transition-all"
-                            placeholder="例如：請優先將主科排在上午，並確保王老師週一早上沒課..."
-                            value={aiPrompt}
-                            onChange={e => setAiPrompt(e.target.value)}
-                        />
-                        <div className="flex gap-4">
-                            <button 
-                            onClick={() => setIsAIModalOpen(false)}
-                            className="flex-1 py-5 text-gray-500 font-black hover:bg-gray-50 rounded-2xl transition-all"
-                            >
-                            取消
-                            </button>
-                            <button 
-                            onClick={runAIScheduling}
-                            disabled={isAILoading}
-                            className="flex-[2] py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-3"
-                            >
-                            {isAILoading ? (
-                                <><div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin"></div> 運算中...</>
-                            ) : '✨ 開始排課'}
-                            </button>
-                        </div>
-                        </div>
-                    </div>
-                    </div>
-                )}
-
-                {/* Edit Modal */}
-                {isEditing && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-300 no-print">
-                    <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden">
-                        <div className="p-8 bg-gray-900 text-white flex justify-between items-center">
-                        <h3 className="text-xl font-black">{editingLesson?.id ? '修改課程' : '新增課程'}</h3>
-                        <button onClick={() => setIsEditing(false)} className="text-gray-400 hover:text-white">✕</button>
-                        </div>
-                        <div className="p-8 space-y-5">
-                        <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">科目 Subject</label>
-                            <input className="w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-indigo-500 outline-none font-black shadow-inner" value={editingLesson?.subject || ''} onChange={e => setEditingLesson(prev => ({ ...prev, subject: e.target.value }))} placeholder="例如：國語" />
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">主要教師</label>
-                            <select className="w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-indigo-500 outline-none font-black shadow-inner" value={formTeacher1} onChange={e => setFormTeacher1(e.target.value)}>
-                                <option value="">請選擇</option>
-                                {teachers.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                            </div>
-                            <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">協同教師 (選填)</label>
-                            <select className="w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-indigo-500 outline-none font-black shadow-inner" value={formTeacher2} onChange={e => setFormTeacher2(e.target.value)}>
-                                <option value="">無</option>
-                                {teachers.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">授課地點 Room</label>
-                            <select className="w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-indigo-500 outline-none font-black shadow-inner" value={editingLesson?.room || ''} onChange={e => setEditingLesson(prev => ({ ...prev, room: e.target.value }))}>
-                            <option value="">原班級教室</option>
-                            {rooms.map(r => <option key={r} value={r}>{r}</option>)}
-                            </select>
-                        </div>
-
-                        <div className="flex gap-4 pt-4">
-                            {editingLesson?.id && (
-                            <button onClick={handleDeleteLesson} className="flex-1 py-4 bg-red-50 text-red-600 rounded-2xl font-black hover:bg-red-500 hover:text-white transition-all">刪除</button>
-                            )}
-                            <button onClick={handleSaveLesson} className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all">儲存變更</button>
-                        </div>
-                        </div>
-                    </div>
-                    </div>
-                )}
-
-                {/* 隱藏的檔案輸入框 */}
-                <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleFileChange} 
-                    accept=".json" 
-                    className="hidden" 
-                />
-                </div>
-            );
-        };
-
-        const rootElement = document.getElementById('root');
-        const root = ReactDOM.createRoot(rootElement);
-        root.render(<App />);
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(h(App));
     </script>
 </body>
 </html>
