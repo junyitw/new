@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>均一學校排課與匯出系統gemini-3.5-flash</title>
+    <title>均一學校排課與匯出系統gemini-3.8-flash</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Fonts -->
@@ -862,33 +862,99 @@
                 showToast('🔗 已重新校準並對齊連堂課程標記！', 'success');
             };
 
-            // 學級升級邏輯
-            const handleAcademicYearUpgrade = () => {
-                const classMap = { '101': '201', '201': '301', '301': '401', '401': '501', '501': '601', '601': null };
-                const classToTutor = {};
-                Object.entries(assignments).forEach(([teacherName, tAssignments]) => {
-                    tAssignments.forEach(as => {
-                        if (as.subject === '晨圈') classToTutor[as.classId] = teacherName;
-                    });
-                });
+            // 學級升級邏輯：導師晉級後直接繼承新年級的導師配課包，科任老師配課維持不變
+const handleAcademicYearUpgrade = () => {
+    // 年級遞晉對照表（101 -> 201 -> 301 -> 401 -> 501 -> 601 -> 101 循環）
+    const classMap = { 
+        '101': '201', 
+        '201': '301', 
+        '301': '401', 
+        '401': '501', 
+        '501': '601', 
+        '601': '101' 
+    };
 
-                const nextLessons = lessons.map(l => {
-                    const lTeachers = (l.teacher || '').split(',').map(n => n.trim());
-                    const curTutor = classToTutor[l.classId];
-                    if (curTutor && lTeachers.includes(curTutor)) {
-                        let incomingTutor = '';
-                        Object.entries(classMap).forEach(([prev, next]) => {
-                            if (next === l.classId) incomingTutor = classToTutor[prev];
-                        });
-                        if (incomingTutor) return { ...l, teacher: incomingTutor };
-                    }
-                    return l;
-                });
+    // 1. 找出各班目前的原任導師（以配課中有「晨圈」者判定為該班導師）
+    const classToTutor = {};
+    const tutorToCurrentClass = {};
+    Object.entries(assignments).forEach(([teacherName, tAssignments]) => {
+        tAssignments.forEach(as => {
+            if (as.subject === '晨圈') {
+                classToTutor[as.classId] = teacherName;
+                tutorToCurrentClass[teacherName] = as.classId;
+            }
+        });
+    });
 
-                setLessons(nextLessons);
-                setIsUpgradeModalOpen(false);
-                showToast('🎓 學級升級完成！導師已按年級遞晉！', 'success');
-            };
+    // 2. 擷取各班原本既有的「導師配課包」模板（該導師在該班負責的所有配課）
+    const classTutorPackage = {};
+    Object.entries(classToTutor).forEach(([cls, tutorName]) => {
+        const tAssignments = assignments[tutorName] || [];
+        // 取出該班導師在自己帶的班級所配的所有課程
+        classTutorPackage[cls] = tAssignments.filter(as => as.classId === cls);
+    });
+
+    // 3. 計算各導師升級後負責的新班級
+    // 例如：原 201 導師 -> 新接 301 班
+    const tutorToNextClass = {};
+    Object.entries(tutorToCurrentClass).forEach(([teacherName, curClass]) => {
+        tutorToNextClass[teacherName] = classMap[curClass];
+    });
+
+    // 4. 重構師資配課庫 (assignments)
+    const nextAssignments = {};
+    teachers.forEach(teacherName => {
+        const curAssignments = assignments[teacherName] || [];
+        const isTutor = Boolean(tutorToCurrentClass[teacherName]);
+
+        if (isTutor) {
+            const oldClass = tutorToCurrentClass[teacherName];
+            const targetClass = tutorToNextClass[teacherName];
+
+            // (A) 保留該導師若有其他非本班導師職責的個人兼課
+            const nonHomeroomAssignments = curAssignments.filter(as => as.classId !== oldClass);
+
+            // (B) 直接繼承目標年級「既有的導師配課包」
+            const inheritedPackage = (classTutorPackage[targetClass] || []).map(as => ({
+                ...as,
+                classId: targetClass // 確保班級標記與目標年級一致
+            }));
+
+            nextAssignments[teacherName] = [...nonHomeroomAssignments, ...inheritedPackage];
+        } else {
+            // (C) 科任老師：配課與班級完全不變
+            nextAssignments[teacherName] = JSON.parse(JSON.stringify(curAssignments));
+        }
+    });
+
+    // 5. 更新課表排定清單 (lessons)：將各班導師授課項目交接給新任導師
+    const nextLessons = lessons.map(l => {
+        const lTeachers = (l.teacher || '').split(',').map(n => n.trim());
+        const curClassTutor = classToTutor[l.classId]; // 該班原任導師
+
+        // 若該節課由原任導師授課，則改由晉升接掌該班的新導師授課
+        if (curClassTutor && lTeachers.includes(curClassTutor)) {
+            let incomingTutor = '';
+            Object.entries(classMap).forEach(([prevClass, nextClass]) => {
+                if (nextClass === l.classId) {
+                    incomingTutor = classToTutor[prevClass];
+                }
+            });
+
+            if (incomingTutor) {
+                const replaced = lTeachers.map(t => (t === curClassTutor ? incomingTutor : t)).join(', ');
+                return { ...l, teacher: replaced };
+            }
+        }
+        return l;
+    });
+
+    // 6. 寫回狀態並提示
+    setAssignments(nextAssignments);
+    setLessons(nextLessons);
+    setIsUpgradeModalOpen(false);
+    showToast('🎓 學級升級完成！導師已帶班晉級並直接繼承新年級導師配課，科任配課全數保留！', 'success');
+};
 
             // 拖拉調課處理（含遮罩防護與成對連堂連動）
             const handleMoveLesson = (sourceId, targetDay, targetPeriodId, targetClassId) => {
@@ -1044,7 +1110,7 @@
   }
 ]`;
 
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${geminiApiKey}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1345,7 +1411,7 @@
                 isKeyModalOpen && h('div', { className: 'fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 no-print' }, [
                     h('div', { className: 'bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden p-8 animate-in zoom-in-95' }, [
                         h('h3', { className: 'text-2xl font-black text-gray-900 mb-2' }, '🔑 設定 Gemini API Key'),
-                        h('p', { className: 'text-gray-500 text-xs font-bold mb-4' }, '請輸入您的 Google AI Studio API Key，金鑰將直接安全儲存在您目前的瀏覽器中：'),
+                        h('p', { className: 'text-gray-500 text-xs font-bold mb-4' }, '請輸入您的 AIzaSyBR4fza3m3Vmio12wF5J5gQduYAcutm2tg，金鑰將直接安全儲存在您目前的瀏覽器中：'),
                         h('input', {
                             type: 'password',
                             className: 'w-full px-5 py-4 rounded-2xl bg-gray-50 border-2 font-mono text-sm outline-none focus:border-amber-500 mb-6',
