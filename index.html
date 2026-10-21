@@ -1442,10 +1442,11 @@
         }); 
       },
 
-      getStatsData() {
+      getStatsData(startDate = null, endDate = null) {
         const st = this.data.students.filter(s => s.class === this.data.currentClass);
-        const d1 = document.getElementById('statStartDate').value;
-        const d2 = document.getElementById('statEndDate').value;
+        // 若有傳入指定日期則使用指定日期，否則讀取統計報表頁面的日期
+        const d1 = startDate !== null ? startDate : (document.getElementById('statStartDate')?.value || '');
+        const d2 = endDate !== null ? endDate : (document.getElementById('statEndDate')?.value || '');
         const rangeKey = `${d1}_${d2}`;
         
         return st.map(s => {
@@ -1659,10 +1660,14 @@
         const container = document.getElementById('reportsContainer');
         if (!container) return;
         container.innerHTML = '';
-        const st = this.getStatsData(); 
-        const d1 = document.getElementById('reportStartDate').value;
-        const d2 = document.getElementById('reportEndDate').value;
+        
+        // 🌟 提前取得「個人通知單」頁面專屬的日期選擇器數值
+        const d1 = document.getElementById('reportStartDate')?.value;
+        const d2 = document.getElementById('reportEndDate')?.value;
         if(!d1 || !d2) return container.innerHTML = '<div class="text-center p-4">請選擇日期範圍</div>';
+
+        // 🌟 將通知單日期帶入計算，不再讀錯成統計分頁的日期
+        const st = this.getStatsData(d1, d2); 
         if(st.length === 0) return container.innerHTML = '<div class="text-center p-4">無學生資料</div>';
 
         const rocD1 = this.formatDateROC(d1);
